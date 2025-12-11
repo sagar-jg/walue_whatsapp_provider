@@ -1,0 +1,129 @@
+{
+    "actions": [],
+    "allow_rename": 1,
+    "autoname": "field:plan_name",
+    "creation": "2025-01-01 00:00:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "plan_name",
+        "is_active",
+        "column_break_1",
+        "base_monthly_fee",
+        "pricing_section",
+        "call_markup_percentage",
+        "message_markup_percentage",
+        "column_break_pricing",
+        "included_calls",
+        "included_messages",
+        "features_section",
+        "features_json",
+        "description"
+    ],
+    "fields": [
+        {
+            "fieldname": "plan_name",
+            "fieldtype": "Data",
+            "label": "Plan Name",
+            "reqd": 1,
+            "unique": 1,
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "is_active",
+            "fieldtype": "Check",
+            "label": "Active",
+            "default": 1,
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "column_break_1",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "base_monthly_fee",
+            "fieldtype": "Currency",
+            "label": "Base Monthly Fee",
+            "reqd": 1,
+            "in_list_view": 1,
+            "description": "Monthly subscription fee in USD"
+        },
+        {
+            "fieldname": "pricing_section",
+            "fieldtype": "Section Break",
+            "label": "Markup Configuration"
+        },
+        {
+            "fieldname": "call_markup_percentage",
+            "fieldtype": "Percent",
+            "label": "Call Markup %",
+            "default": 35,
+            "description": "Percentage markup on Meta's call rates"
+        },
+        {
+            "fieldname": "message_markup_percentage",
+            "fieldtype": "Percent",
+            "label": "Message Markup %",
+            "default": 30,
+            "description": "Percentage markup on Meta's message rates"
+        },
+        {
+            "fieldname": "column_break_pricing",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "included_calls",
+            "fieldtype": "Int",
+            "label": "Included Calls",
+            "default": 0,
+            "description": "Number of free calls included per month"
+        },
+        {
+            "fieldname": "included_messages",
+            "fieldtype": "Int",
+            "label": "Included Messages",
+            "default": 0,
+            "description": "Number of free messages included per month"
+        },
+        {
+            "fieldname": "features_section",
+            "fieldtype": "Section Break",
+            "label": "Features"
+        },
+        {
+            "fieldname": "features_json",
+            "fieldtype": "JSON",
+            "label": "Features",
+            "description": "JSON array of enabled features: [\"calling\", \"messaging\", \"call_recording\", \"analytics\"]"
+        },
+        {
+            "fieldname": "description",
+            "fieldtype": "Small Text",
+            "label": "Description"
+        }
+    ],
+    "links": [],
+    "modified": "2025-01-01 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Walue Whatsapp Provider",
+    "name": "Subscription Plan",
+    "naming_rule": "By fieldname",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "track_changes": 1
+}

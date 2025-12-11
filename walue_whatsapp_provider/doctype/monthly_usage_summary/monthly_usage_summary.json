@@ -1,0 +1,138 @@
+{
+    "actions": [],
+    "allow_rename": 0,
+    "autoname": "format:{customer}-{month}",
+    "creation": "2025-01-01 00:00:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "customer",
+        "month",
+        "invoice_generated",
+        "usage_section",
+        "total_calls",
+        "total_call_minutes",
+        "column_break_usage",
+        "total_messages",
+        "billing_section",
+        "base_fee",
+        "usage_charges",
+        "column_break_billing",
+        "total_amount"
+    ],
+    "fields": [
+        {
+            "fieldname": "customer",
+            "fieldtype": "Link",
+            "label": "Customer",
+            "options": "WhatsApp Customer",
+            "reqd": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "month",
+            "fieldtype": "Data",
+            "label": "Month",
+            "reqd": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "description": "Format: YYYY-MM (e.g., 2025-01)"
+        },
+        {
+            "fieldname": "invoice_generated",
+            "fieldtype": "Check",
+            "label": "Invoice Generated",
+            "default": 0,
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "usage_section",
+            "fieldtype": "Section Break",
+            "label": "Usage Summary"
+        },
+        {
+            "fieldname": "total_calls",
+            "fieldtype": "Int",
+            "label": "Total Calls",
+            "default": 0,
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "total_call_minutes",
+            "fieldtype": "Float",
+            "label": "Total Call Minutes",
+            "default": 0,
+            "precision": 2
+        },
+        {
+            "fieldname": "column_break_usage",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "total_messages",
+            "fieldtype": "Int",
+            "label": "Total Messages",
+            "default": 0,
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "billing_section",
+            "fieldtype": "Section Break",
+            "label": "Billing"
+        },
+        {
+            "fieldname": "base_fee",
+            "fieldtype": "Currency",
+            "label": "Base Fee",
+            "default": 0,
+            "description": "Monthly subscription fee"
+        },
+        {
+            "fieldname": "usage_charges",
+            "fieldtype": "Currency",
+            "label": "Usage Charges",
+            "default": 0,
+            "description": "Charges for calls and messages"
+        },
+        {
+            "fieldname": "column_break_billing",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "total_amount",
+            "fieldtype": "Currency",
+            "label": "Total Amount",
+            "default": 0,
+            "in_list_view": 1,
+            "description": "Base fee + usage charges"
+        }
+    ],
+    "links": [
+        {
+            "link_doctype": "Customer Invoice",
+            "link_fieldname": "customer"
+        }
+    ],
+    "modified": "2025-01-01 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Walue Whatsapp Provider",
+    "name": "Monthly Usage Summary",
+    "naming_rule": "Expression",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        }
+    ],
+    "sort_field": "month",
+    "sort_order": "DESC",
+    "track_changes": 1
+}

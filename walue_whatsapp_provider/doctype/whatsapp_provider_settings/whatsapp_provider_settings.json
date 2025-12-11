@@ -1,0 +1,145 @@
+{
+    "actions": [],
+    "allow_rename": 0,
+    "creation": "2025-01-01 00:00:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "meta_section",
+        "meta_app_id",
+        "meta_app_secret",
+        "meta_configuration_id",
+        "meta_api_version",
+        "column_break_meta",
+        "meta_webhook_verify_token",
+        "enabled",
+        "janus_section",
+        "janus_ws_url",
+        "janus_api_secret",
+        "column_break_janus",
+        "janus_admin_secret",
+        "oauth_section",
+        "oauth_token_expiry_seconds",
+        "oauth_refresh_expiry_seconds"
+    ],
+    "fields": [
+        {
+            "fieldname": "meta_section",
+            "fieldtype": "Section Break",
+            "label": "Meta WhatsApp Configuration"
+        },
+        {
+            "fieldname": "meta_app_id",
+            "fieldtype": "Data",
+            "label": "Meta App ID",
+            "reqd": 1,
+            "description": "Your Meta/Facebook App ID"
+        },
+        {
+            "fieldname": "meta_app_secret",
+            "fieldtype": "Password",
+            "label": "Meta App Secret",
+            "reqd": 1,
+            "description": "Your Meta/Facebook App Secret (encrypted)"
+        },
+        {
+            "fieldname": "meta_configuration_id",
+            "fieldtype": "Data",
+            "label": "Configuration ID",
+            "description": "Embedded Signup Configuration ID from Meta Developer Portal"
+        },
+        {
+            "fieldname": "meta_api_version",
+            "fieldtype": "Data",
+            "label": "API Version",
+            "default": "v21.0",
+            "description": "Meta Graph API version"
+        },
+        {
+            "fieldname": "column_break_meta",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "meta_webhook_verify_token",
+            "fieldtype": "Password",
+            "label": "Webhook Verify Token",
+            "reqd": 1,
+            "description": "Token for Meta webhook verification (also used as JWT secret)"
+        },
+        {
+            "fieldname": "enabled",
+            "fieldtype": "Check",
+            "label": "Enabled",
+            "default": 1,
+            "description": "Enable/disable the WhatsApp provider service"
+        },
+        {
+            "fieldname": "janus_section",
+            "fieldtype": "Section Break",
+            "label": "Janus WebRTC Gateway"
+        },
+        {
+            "fieldname": "janus_ws_url",
+            "fieldtype": "Data",
+            "label": "Janus WebSocket URL",
+            "description": "WebSocket URL for Janus gateway (e.g., wss://janus.example.com:8989)"
+        },
+        {
+            "fieldname": "janus_api_secret",
+            "fieldtype": "Password",
+            "label": "Janus API Secret",
+            "description": "API secret for Janus gateway"
+        },
+        {
+            "fieldname": "column_break_janus",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "janus_admin_secret",
+            "fieldtype": "Password",
+            "label": "Janus Admin Secret",
+            "description": "Admin secret for Janus gateway management"
+        },
+        {
+            "fieldname": "oauth_section",
+            "fieldtype": "Section Break",
+            "label": "OAuth Configuration"
+        },
+        {
+            "fieldname": "oauth_token_expiry_seconds",
+            "fieldtype": "Int",
+            "label": "Access Token Expiry (seconds)",
+            "default": 3600,
+            "description": "Access token validity period (default: 1 hour)"
+        },
+        {
+            "fieldname": "oauth_refresh_expiry_seconds",
+            "fieldtype": "Int",
+            "label": "Refresh Token Expiry (seconds)",
+            "default": 2592000,
+            "description": "Refresh token validity period (default: 30 days)"
+        }
+    ],
+    "issingle": 1,
+    "links": [],
+    "modified": "2025-01-01 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Walue Whatsapp Provider",
+    "name": "WhatsApp Provider Settings",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "print": 1,
+            "read": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "track_changes": 1
+}

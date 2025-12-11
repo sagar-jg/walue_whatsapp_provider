@@ -1,0 +1,219 @@
+{
+    "actions": [],
+    "allow_rename": 0,
+    "autoname": "naming_series:",
+    "creation": "2025-01-01 00:00:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "naming_series",
+        "customer_name",
+        "company_email",
+        "status",
+        "column_break_1",
+        "frappe_site_url",
+        "created_date",
+        "last_sync",
+        "waba_section",
+        "embedded_signup_completed",
+        "meta_business_id",
+        "column_break_waba",
+        "waba_id",
+        "phone_number_id",
+        "oauth_section",
+        "oauth_client_id",
+        "oauth_client_secret",
+        "billing_section",
+        "subscription_plan",
+        "billing_cycle",
+        "column_break_billing",
+        "current_balance"
+    ],
+    "fields": [
+        {
+            "fieldname": "naming_series",
+            "fieldtype": "Select",
+            "label": "Series",
+            "options": "WC-.YYYY.-",
+            "default": "WC-.YYYY.-",
+            "hidden": 1
+        },
+        {
+            "fieldname": "customer_name",
+            "fieldtype": "Data",
+            "label": "Customer Name",
+            "reqd": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "company_email",
+            "fieldtype": "Data",
+            "label": "Company Email",
+            "options": "Email",
+            "reqd": 1,
+            "unique": 1,
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "status",
+            "fieldtype": "Select",
+            "label": "Status",
+            "options": "Pending\nActive\nSuspended\nCancelled",
+            "default": "Pending",
+            "reqd": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "column_break_1",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "frappe_site_url",
+            "fieldtype": "Data",
+            "label": "Frappe Site URL",
+            "reqd": 1,
+            "description": "Customer's Frappe/ERPNext site URL (e.g., https://customer.erpnext.com)"
+        },
+        {
+            "fieldname": "created_date",
+            "fieldtype": "Date",
+            "label": "Created Date",
+            "default": "Today",
+            "read_only": 1
+        },
+        {
+            "fieldname": "last_sync",
+            "fieldtype": "Datetime",
+            "label": "Last Sync",
+            "read_only": 1,
+            "description": "Last time customer app synced with provider"
+        },
+        {
+            "fieldname": "waba_section",
+            "fieldtype": "Section Break",
+            "label": "WhatsApp Business Account",
+            "collapsible": 1
+        },
+        {
+            "fieldname": "embedded_signup_completed",
+            "fieldtype": "Check",
+            "label": "Embedded Signup Completed",
+            "read_only": 1
+        },
+        {
+            "fieldname": "meta_business_id",
+            "fieldtype": "Data",
+            "label": "Meta Business ID",
+            "read_only": 1,
+            "description": "Reference only - credentials stored in customer's system"
+        },
+        {
+            "fieldname": "column_break_waba",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "waba_id",
+            "fieldtype": "Data",
+            "label": "WABA ID",
+            "read_only": 1,
+            "description": "WhatsApp Business Account ID (reference only)"
+        },
+        {
+            "fieldname": "phone_number_id",
+            "fieldtype": "Data",
+            "label": "Phone Number ID",
+            "read_only": 1,
+            "description": "Registered phone number ID (reference only)"
+        },
+        {
+            "fieldname": "oauth_section",
+            "fieldtype": "Section Break",
+            "label": "OAuth Credentials"
+        },
+        {
+            "fieldname": "oauth_client_id",
+            "fieldtype": "Data",
+            "label": "OAuth Client ID",
+            "read_only": 1,
+            "description": "Auto-generated client ID for OAuth authentication"
+        },
+        {
+            "fieldname": "oauth_client_secret",
+            "fieldtype": "Password",
+            "label": "OAuth Client Secret",
+            "description": "Auto-generated client secret (encrypted)"
+        },
+        {
+            "fieldname": "billing_section",
+            "fieldtype": "Section Break",
+            "label": "Billing"
+        },
+        {
+            "fieldname": "subscription_plan",
+            "fieldtype": "Link",
+            "label": "Subscription Plan",
+            "options": "Subscription Plan",
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "billing_cycle",
+            "fieldtype": "Select",
+            "label": "Billing Cycle",
+            "options": "Monthly\nQuarterly\nAnnual",
+            "default": "Monthly"
+        },
+        {
+            "fieldname": "column_break_billing",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "current_balance",
+            "fieldtype": "Currency",
+            "label": "Current Balance",
+            "default": 0,
+            "read_only": 1,
+            "description": "Current account balance/credit"
+        }
+    ],
+    "links": [
+        {
+            "link_doctype": "Daily Usage Metrics",
+            "link_fieldname": "customer"
+        },
+        {
+            "link_doctype": "Monthly Usage Summary",
+            "link_fieldname": "customer"
+        },
+        {
+            "link_doctype": "Customer Invoice",
+            "link_fieldname": "customer"
+        }
+    ],
+    "modified": "2025-01-01 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Walue Whatsapp Provider",
+    "name": "WhatsApp Customer",
+    "naming_rule": "By \"Naming Series\" field",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        }
+    ],
+    "search_fields": "customer_name,company_email",
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "title_field": "customer_name",
+    "track_changes": 1
+}

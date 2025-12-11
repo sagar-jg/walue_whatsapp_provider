@@ -1,0 +1,157 @@
+{
+    "actions": [],
+    "allow_rename": 0,
+    "autoname": "naming_series:",
+    "creation": "2025-01-01 00:00:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "naming_series",
+        "customer",
+        "invoice_status",
+        "column_break_1",
+        "invoice_period_start",
+        "invoice_period_end",
+        "payment_date",
+        "charges_section",
+        "base_fee",
+        "call_charges",
+        "message_charges",
+        "column_break_charges",
+        "total_calls",
+        "total_messages",
+        "total_section",
+        "total_amount"
+    ],
+    "fields": [
+        {
+            "fieldname": "naming_series",
+            "fieldtype": "Select",
+            "label": "Series",
+            "options": "INV-.YYYY.-",
+            "default": "INV-.YYYY.-",
+            "hidden": 1
+        },
+        {
+            "fieldname": "customer",
+            "fieldtype": "Link",
+            "label": "Customer",
+            "options": "WhatsApp Customer",
+            "reqd": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "invoice_status",
+            "fieldtype": "Select",
+            "label": "Status",
+            "options": "Draft\nSent\nPaid\nOverdue",
+            "default": "Draft",
+            "reqd": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "column_break_1",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "invoice_period_start",
+            "fieldtype": "Date",
+            "label": "Period Start",
+            "reqd": 1,
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "invoice_period_end",
+            "fieldtype": "Date",
+            "label": "Period End",
+            "reqd": 1
+        },
+        {
+            "fieldname": "payment_date",
+            "fieldtype": "Date",
+            "label": "Payment Date",
+            "depends_on": "eval:doc.invoice_status=='Paid'"
+        },
+        {
+            "fieldname": "charges_section",
+            "fieldtype": "Section Break",
+            "label": "Charges"
+        },
+        {
+            "fieldname": "base_fee",
+            "fieldtype": "Currency",
+            "label": "Base Fee",
+            "default": 0,
+            "description": "Monthly subscription fee"
+        },
+        {
+            "fieldname": "call_charges",
+            "fieldtype": "Currency",
+            "label": "Call Charges",
+            "default": 0
+        },
+        {
+            "fieldname": "message_charges",
+            "fieldtype": "Currency",
+            "label": "Message Charges",
+            "default": 0
+        },
+        {
+            "fieldname": "column_break_charges",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "total_calls",
+            "fieldtype": "Int",
+            "label": "Total Calls",
+            "default": 0,
+            "read_only": 1
+        },
+        {
+            "fieldname": "total_messages",
+            "fieldtype": "Int",
+            "label": "Total Messages",
+            "default": 0,
+            "read_only": 1
+        },
+        {
+            "fieldname": "total_section",
+            "fieldtype": "Section Break"
+        },
+        {
+            "fieldname": "total_amount",
+            "fieldtype": "Currency",
+            "label": "Total Amount",
+            "default": 0,
+            "reqd": 1,
+            "in_list_view": 1,
+            "bold": 1
+        }
+    ],
+    "links": [],
+    "modified": "2025-01-01 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Walue Whatsapp Provider",
+    "name": "Customer Invoice",
+    "naming_rule": "By \"Naming Series\" field",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "track_changes": 1
+}

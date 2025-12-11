@@ -1,0 +1,113 @@
+{
+    "actions": [],
+    "allow_rename": 0,
+    "autoname": "hash",
+    "creation": "2025-01-01 00:00:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "customer",
+        "session_id",
+        "status",
+        "column_break_1",
+        "created_at",
+        "completed_at",
+        "details_section",
+        "signup_url",
+        "code",
+        "error_message"
+    ],
+    "fields": [
+        {
+            "fieldname": "customer",
+            "fieldtype": "Link",
+            "label": "Customer",
+            "options": "WhatsApp Customer",
+            "reqd": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "session_id",
+            "fieldtype": "Data",
+            "label": "Session ID",
+            "reqd": 1,
+            "unique": 1,
+            "read_only": 1,
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "status",
+            "fieldtype": "Select",
+            "label": "Status",
+            "options": "initiated\nin_progress\ncompleted\nfailed",
+            "default": "initiated",
+            "reqd": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "column_break_1",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "created_at",
+            "fieldtype": "Datetime",
+            "label": "Created At",
+            "read_only": 1,
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "completed_at",
+            "fieldtype": "Datetime",
+            "label": "Completed At",
+            "read_only": 1
+        },
+        {
+            "fieldname": "details_section",
+            "fieldtype": "Section Break",
+            "label": "Details",
+            "collapsible": 1
+        },
+        {
+            "fieldname": "signup_url",
+            "fieldtype": "Data",
+            "label": "Signup URL",
+            "read_only": 1,
+            "description": "Generated embedded signup URL"
+        },
+        {
+            "fieldname": "code",
+            "fieldtype": "Data",
+            "label": "OAuth Code",
+            "read_only": 1,
+            "description": "Authorization code received from Meta"
+        },
+        {
+            "fieldname": "error_message",
+            "fieldtype": "Text",
+            "label": "Error Message",
+            "read_only": 1
+        }
+    ],
+    "links": [],
+    "modified": "2025-01-01 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Walue Whatsapp Provider",
+    "name": "Embedded Signup Session",
+    "naming_rule": "Random",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "email": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1
+        }
+    ],
+    "sort_field": "created_at",
+    "sort_order": "DESC",
+    "track_changes": 0
+}
