@@ -8,6 +8,7 @@
         "meta_section",
         "meta_app_id",
         "meta_app_secret",
+        "meta_system_user_token",
         "meta_configuration_id",
         "meta_api_version",
         "column_break_meta",
@@ -41,6 +42,13 @@
             "label": "Meta App Secret",
             "reqd": 1,
             "description": "Your Meta/Facebook App Secret (encrypted)"
+        },
+        {
+            "fieldname": "meta_system_user_token",
+            "fieldtype": "Password",
+            "label": "System User Token",
+            "reqd": 1,
+            "description": "Your Meta System User Access Token - used only during embedded signup to exchange authorization code for customer's WABA token"
         },
         {
             "fieldname": "meta_configuration_id",
