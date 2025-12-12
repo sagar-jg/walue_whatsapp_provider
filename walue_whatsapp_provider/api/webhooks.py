@@ -39,6 +39,11 @@ def meta_webhook():
     Configure this URL in Meta Developer Portal:
     https://your-provider.com/api/method/walue_whatsapp_provider.api.webhooks.meta_webhook
     """
+    # Debug logging
+    print(f"[WEBHOOK] Received {frappe.request.method} request")
+    print(f"[WEBHOOK] Site: {frappe.local.site}")
+    print(f"[WEBHOOK] Args: {frappe.form_dict}")
+
     if frappe.request.method == "GET":
         return _verify_meta_webhook()
     else:
@@ -58,13 +63,22 @@ def _verify_meta_webhook():
     token = frappe.form_dict.get("hub.verify_token")
     challenge = frappe.form_dict.get("hub.challenge")
 
-    settings = frappe.get_single("WhatsApp Provider Settings")
-    verify_token = settings.get_password("meta_webhook_verify_token")
+    print(f"[WEBHOOK VERIFY] mode={mode}, token={token}, challenge={challenge}")
+
+    try:
+        settings = frappe.get_single("WhatsApp Provider Settings")
+        verify_token = settings.get_password("meta_webhook_verify_token")
+        print(f"[WEBHOOK VERIFY] Expected token from settings: {verify_token}")
+    except Exception as e:
+        print(f"[WEBHOOK VERIFY] Error getting settings: {e}")
+        frappe.throw(_(f"Settings error: {e}"), frappe.AuthenticationError)
 
     if mode == "subscribe" and token == verify_token:
+        print(f"[WEBHOOK VERIFY] SUCCESS - returning challenge: {challenge}")
         frappe.response["type"] = "text"
         return challenge
 
+    print(f"[WEBHOOK VERIFY] FAILED - token mismatch or wrong mode")
     frappe.throw(_("Verification failed"), frappe.AuthenticationError)
 
 
