@@ -75,8 +75,13 @@ def _verify_meta_webhook():
 
     if mode == "subscribe" and token == verify_token:
         print(f"[WEBHOOK VERIFY] SUCCESS - returning challenge: {challenge}")
-        frappe.response["type"] = "text"
-        return challenge
+        # Return plain text challenge for Meta verification
+        frappe.response.update({
+            "http_status_code": 200
+        })
+        # Use Response object to return plain text
+        from werkzeug.wrappers import Response
+        return Response(challenge, status=200, mimetype="text/plain")
 
     print(f"[WEBHOOK VERIFY] FAILED - token mismatch or wrong mode")
     frappe.throw(_("Verification failed"), frappe.AuthenticationError)
