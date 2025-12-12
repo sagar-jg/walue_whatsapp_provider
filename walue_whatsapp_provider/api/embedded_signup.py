@@ -119,6 +119,11 @@ def callback():
         # Get WABA details using the access token
         waba_details = _get_waba_details(token_data["access_token"])
 
+        # CRITICAL: Subscribe our app to receive webhooks for this WABA
+        # Without this, webhooks won't be delivered to our app
+        if waba_details.get("waba_id"):
+            _subscribe_app_to_waba(waba_details["waba_id"], token_data["access_token"])
+
         # Update customer record with WABA reference (ID only, not credentials)
         customer = frappe.get_doc("WhatsApp Customer", session.customer)
         customer.meta_business_id = waba_details.get("business_id")
@@ -277,6 +282,58 @@ def _get_valid_session(session_id: str):
     if frappe.db.exists("Embedded Signup Session", {"session_id": session_id}):
         return frappe.get_doc("Embedded Signup Session", {"session_id": session_id})
     return None
+
+
+def _subscribe_app_to_waba(waba_id: str, access_token: str) -> bool:
+    """
+    Subscribe our app to receive webhooks for the customer's WABA
+
+    CRITICAL: This must be called after embedded signup to enable webhooks.
+    Without this subscription, Meta will not send webhooks to our app
+    for this customer's WhatsApp Business Account.
+
+    Args:
+        waba_id: The customer's WhatsApp Business Account ID
+        access_token: The customer's access token (from embedded signup)
+
+    Returns:
+        bool: True if subscription succeeded
+
+    Reference: https://developers.facebook.com/docs/whatsapp/embedded-signup/webhooks
+    """
+    url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{waba_id}/subscribed_apps"
+
+    try:
+        response = requests.post(
+            url,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+        )
+
+        result = response.json()
+
+        if result.get("success"):
+            frappe.log_error(
+                f"Successfully subscribed app to WABA {waba_id}",
+                "WhatsApp Webhook Subscription"
+            )
+            return True
+        else:
+            error_msg = result.get("error", {}).get("message", "Unknown error")
+            frappe.log_error(
+                f"Failed to subscribe app to WABA {waba_id}: {error_msg}",
+                "WhatsApp Webhook Subscription Error"
+            )
+            return False
+
+    except Exception as e:
+        frappe.log_error(
+            f"Exception subscribing app to WABA {waba_id}: {str(e)}",
+            "WhatsApp Webhook Subscription Error"
+        )
+        return False
 
 
 def _handle_signup_error(session_id: str, error: str, error_description: str):

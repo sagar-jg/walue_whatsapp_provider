@@ -27,17 +27,32 @@ from walue_whatsapp_provider.constants import (
 )
 
 
-@frappe.whitelist(allow_guest=True, methods=["GET"])
-def verify():
+@frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
+def meta_webhook():
     """
-    Webhook verification endpoint for Meta
+    Main webhook endpoint for Meta WhatsApp Business API
 
-    Meta sends a GET request with:
+    This single endpoint handles:
+    - GET: Webhook verification from Meta
+    - POST: Receive webhook events
+
+    Configure this URL in Meta Developer Portal:
+    https://your-provider.com/api/method/walue_whatsapp_provider.api.webhooks.meta_webhook
+    """
+    if frappe.request.method == "GET":
+        return _verify_meta_webhook()
+    else:
+        return _receive_meta_webhook()
+
+
+def _verify_meta_webhook():
+    """
+    Handle webhook verification from Meta (GET request)
+
+    Meta sends:
     - hub.mode: 'subscribe'
     - hub.verify_token: Our configured token
     - hub.challenge: Challenge to return
-
-    Returns the challenge if token matches
     """
     mode = frappe.form_dict.get("hub.mode")
     token = frappe.form_dict.get("hub.verify_token")
@@ -48,14 +63,12 @@ def verify():
 
     if mode == "subscribe" and token == verify_token:
         frappe.response["type"] = "text"
-        frappe.response["status_code"] = 200
         return challenge
 
     frappe.throw(_("Verification failed"), frappe.AuthenticationError)
 
 
-@frappe.whitelist(allow_guest=True, methods=["POST"])
-def receive():
+def _receive_meta_webhook():
     """
     Receive webhooks from Meta WhatsApp Business API
 
