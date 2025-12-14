@@ -235,6 +235,7 @@ def initiate():
                 "customer_id": customer_info["customer_id"],
                 "janus_session_id": janus_session["session_id"],
                 "janus_handle_id": janus_session["handle_id"],
+                "janus_room_id": janus_session.get("room_id"),
                 "started_at": datetime.now().isoformat(),
                 "status": "initiating",
             },
@@ -250,6 +251,7 @@ def initiate():
             "call_session_id": call_session_id,
             "janus_session_id": janus_session["session_id"],
             "janus_handle_id": janus_session["handle_id"],
+            "janus_room_id": janus_session.get("room_id"),
             "janus_ws_url": settings.janus_ws_url,
             "ice_servers": ice_servers,
         }
@@ -296,7 +298,8 @@ def end():
     # Clean up Janus session
     _cleanup_janus_session(
         session_data["janus_session_id"],
-        session_data["janus_handle_id"]
+        session_data["janus_handle_id"],
+        session_data.get("janus_room_id")
     )
 
     # Calculate cost
@@ -356,11 +359,331 @@ def status():
     }
 
 
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def pre_accept():
+    """
+    Send pre-accept signal to Meta WhatsApp Business Calling API
+
+    This should be called after generating SDP answer from WebRTC.
+    Pre-accept establishes media connection before final acceptance.
+
+    POST Body (JSON):
+        phone_number_id: Customer's WhatsApp phone number ID
+        access_token: Customer's Meta access token
+        call_id: The call ID from call_connect webhook
+        sdp: SDP answer from WebRTC
+
+    Returns:
+        dict: Success status
+    """
+    customer_info = _authenticate_request()
+
+    data = frappe.parse_json(frappe.request.data)
+
+    phone_number_id = data.get("phone_number_id")
+    access_token = data.get("access_token")
+    call_id = data.get("call_id")
+    sdp = data.get("sdp")
+
+    if not all([phone_number_id, access_token, call_id, sdp]):
+        frappe.throw(_("Missing required parameters"))
+
+    url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "call_id": call_id,
+        "action": "pre_accept",
+        "session": {
+            "sdp_type": "answer",
+            "sdp": sdp
+        }
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        response_data = response.json()
+
+        if response.status_code != 200:
+            error_msg = response_data.get("error", {}).get("message", ERR_META_API)
+            frappe.log_error(f"Meta pre_accept failed: {error_msg}")
+            return {"success": False, "error": error_msg}
+
+        return {
+            "success": True,
+            "message": "Pre-accept sent successfully",
+        }
+
+    except requests.RequestException as e:
+        frappe.log_error(f"Meta API pre_accept failed: {str(e)}")
+        return {"success": False, "error": ERR_META_API}
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def accept():
+    """
+    Accept a WhatsApp call via Meta API
+
+    This should be called after pre_accept and once WebRTC connection is established.
+
+    POST Body (JSON):
+        phone_number_id: Customer's WhatsApp phone number ID
+        access_token: Customer's Meta access token
+        call_id: The call ID from call_connect webhook
+        sdp: SDP answer (if not sent in pre_accept)
+
+    Returns:
+        dict: Success status
+    """
+    customer_info = _authenticate_request()
+
+    data = frappe.parse_json(frappe.request.data)
+
+    phone_number_id = data.get("phone_number_id")
+    access_token = data.get("access_token")
+    call_id = data.get("call_id")
+    sdp = data.get("sdp")
+
+    if not all([phone_number_id, access_token, call_id]):
+        frappe.throw(_("Missing required parameters"))
+
+    url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "call_id": call_id,
+        "action": "accept",
+    }
+
+    # Include SDP if provided
+    if sdp:
+        payload["session"] = {
+            "sdp_type": "answer",
+            "sdp": sdp
+        }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        response_data = response.json()
+
+        if response.status_code != 200:
+            error_msg = response_data.get("error", {}).get("message", ERR_META_API)
+            frappe.log_error(f"Meta accept failed: {error_msg}")
+            return {"success": False, "error": error_msg}
+
+        return {
+            "success": True,
+            "message": "Call accepted successfully",
+        }
+
+    except requests.RequestException as e:
+        frappe.log_error(f"Meta API accept failed: {str(e)}")
+        return {"success": False, "error": ERR_META_API}
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def reject():
+    """
+    Reject an incoming WhatsApp call
+
+    POST Body (JSON):
+        phone_number_id: Customer's WhatsApp phone number ID
+        access_token: Customer's Meta access token
+        call_id: The call ID from call_connect webhook
+
+    Returns:
+        dict: Success status
+    """
+    customer_info = _authenticate_request()
+
+    data = frappe.parse_json(frappe.request.data)
+
+    phone_number_id = data.get("phone_number_id")
+    access_token = data.get("access_token")
+    call_id = data.get("call_id")
+
+    if not all([phone_number_id, access_token, call_id]):
+        frappe.throw(_("Missing required parameters"))
+
+    url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "call_id": call_id,
+        "action": "reject",
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        response_data = response.json()
+
+        if response.status_code != 200:
+            error_msg = response_data.get("error", {}).get("message", ERR_META_API)
+            return {"success": False, "error": error_msg}
+
+        return {
+            "success": True,
+            "message": "Call rejected",
+        }
+
+    except requests.RequestException as e:
+        frappe.log_error(f"Meta API reject failed: {str(e)}")
+        return {"success": False, "error": ERR_META_API}
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def terminate():
+    """
+    Terminate an active WhatsApp call
+
+    POST Body (JSON):
+        phone_number_id: Customer's WhatsApp phone number ID
+        access_token: Customer's Meta access token
+        call_id: The call ID
+
+    Returns:
+        dict: Success status
+    """
+    customer_info = _authenticate_request()
+
+    data = frappe.parse_json(frappe.request.data)
+
+    phone_number_id = data.get("phone_number_id")
+    access_token = data.get("access_token")
+    call_id = data.get("call_id")
+
+    if not all([phone_number_id, access_token, call_id]):
+        frappe.throw(_("Missing required parameters"))
+
+    url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "call_id": call_id,
+        "action": "terminate",
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        response_data = response.json()
+
+        if response.status_code != 200:
+            error_msg = response_data.get("error", {}).get("message", ERR_META_API)
+            return {"success": False, "error": error_msg}
+
+        return {
+            "success": True,
+            "message": "Call terminated",
+        }
+
+    except requests.RequestException as e:
+        frappe.log_error(f"Meta API terminate failed: {str(e)}")
+        return {"success": False, "error": ERR_META_API}
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def connect():
+    """
+    Initiate an outbound WhatsApp call to a user
+
+    This sends a call connect request to Meta API with SDP offer.
+    The user must have granted call permission first.
+
+    POST Body (JSON):
+        phone_number_id: Customer's WhatsApp phone number ID
+        access_token: Customer's Meta access token
+        to: Recipient phone number (E.164 format)
+        sdp: SDP offer from WebRTC
+
+    Returns:
+        dict: Contains call_id if successful
+    """
+    customer_info = _authenticate_request()
+
+    data = frappe.parse_json(frappe.request.data)
+
+    phone_number_id = data.get("phone_number_id")
+    access_token = data.get("access_token")
+    to_number = data.get("to")
+    sdp = data.get("sdp")
+
+    if not all([phone_number_id, access_token, to_number, sdp]):
+        frappe.throw(_("Missing required parameters"))
+
+    # Check if calling is available for this region
+    country_code = _extract_country_code(to_number)
+    if country_code in CALLING_RESTRICTED_COUNTRIES:
+        return {
+            "success": False,
+            "error": MSG_CALLING_NOT_AVAILABLE,
+            "restricted": True,
+        }
+
+    url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "to": to_number,
+        "action": "connect",
+        "session": {
+            "sdp_type": "offer",
+            "sdp": sdp
+        }
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        response_data = response.json()
+
+        if response.status_code != 200:
+            error_msg = response_data.get("error", {}).get("message", ERR_META_API)
+            frappe.log_error(f"Meta connect call failed: {error_msg}")
+            return {"success": False, "error": error_msg}
+
+        call_id = response_data.get("call_id")
+
+        return {
+            "success": True,
+            "call_id": call_id,
+            "message": "Call initiated, waiting for user to accept",
+        }
+
+    except requests.RequestException as e:
+        frappe.log_error(f"Meta API connect call failed: {str(e)}")
+        return {"success": False, "error": ERR_META_API}
+
+
 def _create_janus_session(customer_id: str) -> dict:
     """
-    Create a Janus WebRTC session
+    Create a Janus WebRTC session for WhatsApp calling
 
-    Returns session_id and handle_id for VideoRoom plugin
+    Creates session, attaches AudioBridge plugin, and creates a room.
+
+    Args:
+        customer_id: Customer identifier for logging
+
+    Returns:
+        dict: Session credentials including session_id, handle_id, room_id
     """
     settings = frappe.get_single("WhatsApp Provider Settings")
 
@@ -368,48 +691,81 @@ def _create_janus_session(customer_id: str) -> dict:
         frappe.log_error("Janus WebSocket URL not configured")
         return None
 
-    # TODO: Implement actual Janus API calls
-    # This is a placeholder - actual implementation requires:
-    # 1. Create Janus session via HTTP/WebSocket
-    # 2. Attach to VideoRoom or SIP plugin
-    # 3. Create/join room
-    # 4. Return session credentials
+    try:
+        from walue_whatsapp_provider.utils.janus_client import create_call_session
 
-    # For now, return mock data
-    return {
-        "session_id": secrets.token_hex(16),
-        "handle_id": secrets.token_hex(16),
-    }
+        janus_session = create_call_session(customer_id)
+
+        return {
+            "session_id": janus_session.session_id,
+            "handle_id": janus_session.handle_id,
+            "room_id": janus_session.room_id,
+        }
+
+    except Exception as e:
+        frappe.log_error(f"Janus session creation failed: {str(e)}", "Janus Call Setup")
+        return None
 
 
-def _cleanup_janus_session(session_id: str, handle_id: str):
+def _cleanup_janus_session(session_id: str, handle_id: str, room_id: int = None):
     """
     Clean up Janus session after call ends
 
-    Destroys the room and detaches handles
+    Destroys the room, detaches handles, and destroys session.
+
+    Args:
+        session_id: Janus session ID
+        handle_id: Plugin handle ID
+        room_id: AudioBridge room ID (optional)
     """
-    # TODO: Implement actual Janus cleanup
-    # 1. Send destroy room request
-    # 2. Detach handle
-    # 3. Destroy session
-    pass
+    try:
+        from walue_whatsapp_provider.utils.janus_client import cleanup_call_session
+
+        cleanup_call_session(session_id, handle_id, room_id)
+
+    except Exception as e:
+        # Log but don't fail - session might already be cleaned up
+        frappe.log_error(f"Janus cleanup warning: {str(e)}", "Janus Cleanup")
 
 
 def _get_ice_servers(settings) -> list:
-    """Get STUN/TURN server configuration"""
-    # Default to Google's STUN servers
-    ice_servers = [
-        {"urls": "stun:stun.l.google.com:19302"},
-        {"urls": "stun:stun1.l.google.com:19302"},
-    ]
+    """
+    Get STUN/TURN server configuration for WebRTC
 
-    # TODO: Add configured TURN servers with credentials
-    # if settings.turn_server_url:
-    #     ice_servers.append({
-    #         "urls": settings.turn_server_url,
-    #         "username": settings.turn_username,
-    #         "credential": settings.get_password("turn_credential"),
-    #     })
+    Returns ICE servers list for RTCPeerConnection configuration.
+
+    Args:
+        settings: WhatsApp Provider Settings document
+
+    Returns:
+        list: ICE servers configuration
+    """
+    ice_servers = []
+
+    # Add STUN servers from settings
+    if settings.stun_servers:
+        for stun_url in settings.stun_servers.strip().split("\n"):
+            stun_url = stun_url.strip()
+            if stun_url:
+                ice_servers.append({"urls": stun_url})
+    else:
+        # Default to Google's STUN servers
+        ice_servers = [
+            {"urls": "stun:stun.l.google.com:19302"},
+            {"urls": "stun:stun1.l.google.com:19302"},
+        ]
+
+    # Add TURN server with credentials if configured
+    if settings.turn_server_url:
+        turn_config = {"urls": settings.turn_server_url}
+
+        if settings.turn_username:
+            turn_config["username"] = settings.turn_username
+
+        if settings.turn_credential:
+            turn_config["credential"] = settings.get_password("turn_credential")
+
+        ice_servers.append(turn_config)
 
     return ice_servers
 

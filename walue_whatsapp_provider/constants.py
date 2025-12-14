@@ -154,6 +154,8 @@ WEBHOOK_MESSAGE_STATUS = "message_status"
 WEBHOOK_INBOUND_MESSAGE = "inbound_message"
 WEBHOOK_CALL_PERMISSION_REPLY = "call_permission_reply"
 WEBHOOK_CALL_STATUS = "call_status"
+WEBHOOK_CALL_CONNECT = "call_connect"
+WEBHOOK_CALL_TERMINATE = "call_terminate"
 
 # =============================================================================
 # CUSTOMER STATUS

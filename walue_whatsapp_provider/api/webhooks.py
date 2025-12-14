@@ -24,6 +24,8 @@ from walue_whatsapp_provider.constants import (
     WEBHOOK_INBOUND_MESSAGE,
     WEBHOOK_CALL_PERMISSION_REPLY,
     WEBHOOK_CALL_STATUS,
+    WEBHOOK_CALL_CONNECT,
+    WEBHOOK_CALL_TERMINATE,
 )
 
 
@@ -164,6 +166,9 @@ def _receive_meta_webhook():
                 if field == "messages":
                     print(f"[WEBHOOK POST] Routing message webhook to customer")
                     _route_message_webhook(customer, value)
+                elif field == "calls":
+                    print(f"[WEBHOOK POST] Routing call webhook to customer")
+                    _route_call_webhook(customer, value, entry)
 
         print(f"[WEBHOOK POST] Done processing, returning OK")
         # Return 200 OK quickly to avoid Meta retries
@@ -288,6 +293,75 @@ def _route_message_webhook(customer, value: dict):
                         "response": interactive.get("call_permission_reply", {}).get("response"),
                         "expiration": interactive.get("call_permission_reply", {}).get("expiration_timestamp"),
                     })
+
+
+def _route_call_webhook(customer, value: dict, entry: dict):
+    """
+    Route WhatsApp Business Calling API webhooks to customer's app
+
+    Webhook types:
+    - CONNECT: Call initiated, contains SDP offer
+    - TERMINATE: Call ended
+
+    Args:
+        customer: Customer document
+        value: Change value from webhook
+        entry: Full entry containing call data
+    """
+    # WhatsApp Business Calling API webhooks have a different structure
+    # They come under the "calls" field with events like:
+    # - connect (with SDP offer)
+    # - terminate (call ended)
+
+    calls = entry.get("calls", [])
+    if not calls:
+        # Try value structure
+        calls = [value] if value else []
+
+    for call in calls:
+        call_id = call.get("id")
+        event = call.get("event", "").lower()
+        direction = call.get("direction", "USER_INITIATED")
+        from_number = call.get("from")
+        to_number = call.get("to")
+        session = call.get("session", {})
+
+        print(f"[CALL WEBHOOK] Processing call event: {event}, call_id: {call_id}")
+
+        if event == "connect":
+            # Call connect event with SDP offer
+            _forward_to_customer(customer, {
+                "type": WEBHOOK_CALL_CONNECT,
+                "call_id": call_id,
+                "direction": direction,
+                "from": from_number,
+                "to": to_number,
+                "sdp_type": session.get("sdp_type", "offer"),
+                "sdp": session.get("sdp"),
+                "timestamp": call.get("timestamp"),
+            })
+
+        elif event == "terminate":
+            # Call terminated
+            _forward_to_customer(customer, {
+                "type": WEBHOOK_CALL_TERMINATE,
+                "call_id": call_id,
+                "status": call.get("status", "COMPLETED"),
+                "duration": call.get("duration"),
+                "start_time": call.get("start_time"),
+                "end_time": call.get("end_time"),
+                "timestamp": call.get("timestamp"),
+            })
+
+        else:
+            # Generic call status update
+            _forward_to_customer(customer, {
+                "type": WEBHOOK_CALL_STATUS,
+                "call_id": call_id,
+                "event": event,
+                "status": call.get("status"),
+                "timestamp": call.get("timestamp"),
+            })
 
 
 def _forward_to_customer(customer, webhook_data: dict):

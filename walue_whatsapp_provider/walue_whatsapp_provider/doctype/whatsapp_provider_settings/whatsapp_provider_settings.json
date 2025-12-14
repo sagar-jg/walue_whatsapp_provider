@@ -16,9 +16,16 @@
         "enabled",
         "janus_section",
         "janus_ws_url",
+        "janus_http_url",
         "janus_api_secret",
         "column_break_janus",
         "janus_admin_secret",
+        "turn_section",
+        "turn_server_url",
+        "turn_username",
+        "turn_credential",
+        "column_break_turn",
+        "stun_servers",
         "oauth_section",
         "oauth_token_expiry_seconds",
         "oauth_refresh_expiry_seconds"
@@ -93,6 +100,12 @@
             "description": "WebSocket URL for Janus gateway (e.g., wss://janus.example.com:8989)"
         },
         {
+            "fieldname": "janus_http_url",
+            "fieldtype": "Data",
+            "label": "Janus HTTP URL",
+            "description": "HTTP API URL for Janus gateway (e.g., https://janus.example.com:8088/janus)"
+        },
+        {
             "fieldname": "janus_api_secret",
             "fieldtype": "Password",
             "label": "Janus API Secret",
@@ -107,6 +120,41 @@
             "fieldtype": "Password",
             "label": "Janus Admin Secret",
             "description": "Admin secret for Janus gateway management"
+        },
+        {
+            "fieldname": "turn_section",
+            "fieldtype": "Section Break",
+            "label": "TURN/STUN Servers",
+            "collapsible": 1
+        },
+        {
+            "fieldname": "turn_server_url",
+            "fieldtype": "Data",
+            "label": "TURN Server URL",
+            "description": "TURN server URL (e.g., turn:turn.example.com:3478)"
+        },
+        {
+            "fieldname": "turn_username",
+            "fieldtype": "Data",
+            "label": "TURN Username",
+            "description": "Username for TURN server authentication"
+        },
+        {
+            "fieldname": "turn_credential",
+            "fieldtype": "Password",
+            "label": "TURN Credential",
+            "description": "Password/credential for TURN server"
+        },
+        {
+            "fieldname": "column_break_turn",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "stun_servers",
+            "fieldtype": "Small Text",
+            "label": "STUN Servers",
+            "default": "stun:stun.l.google.com:19302\nstun:stun1.l.google.com:19302",
+            "description": "STUN server URLs (one per line)"
         },
         {
             "fieldname": "oauth_section",
