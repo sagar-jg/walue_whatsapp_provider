@@ -27,22 +27,7 @@ from walue_whatsapp_provider.constants import (
     USAGE_WARNING_THRESHOLD,
     USAGE_ALERT_THRESHOLD,
 )
-from walue_whatsapp_provider.api.oauth import validate_token
-
-
-def _authenticate_request() -> dict:
-    """Authenticate the request using Bearer token"""
-    auth_header = frappe.request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        frappe.throw(_(ERR_INVALID_TOKEN), frappe.AuthenticationError)
-
-    token = auth_header.split(" ")[1]
-    customer_info = validate_token(token)
-
-    if not customer_info:
-        frappe.throw(_(ERR_INVALID_TOKEN), frappe.AuthenticationError)
-
-    return customer_info
+from walue_whatsapp_provider.utils.auth import authenticate_request as _authenticate_request
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
