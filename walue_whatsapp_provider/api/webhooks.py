@@ -96,28 +96,39 @@ def _receive_meta_webhook():
 
     We do NOT store webhook data - only route it.
     """
+    print(f"[WEBHOOK POST] Starting to process webhook")
+
     # Verify webhook signature
-    if not _verify_signature():
+    signature_valid = _verify_signature()
+    print(f"[WEBHOOK POST] Signature valid: {signature_valid}")
+
+    if not signature_valid:
+        print(f"[WEBHOOK POST] Signature verification FAILED")
         frappe.log_error("Invalid webhook signature")
         frappe.throw(_("Invalid signature"), frappe.AuthenticationError)
 
     try:
         payload = frappe.parse_json(frappe.request.data)
-    except Exception:
+        print(f"[WEBHOOK POST] Payload parsed successfully")
+    except Exception as e:
+        print(f"[WEBHOOK POST] Payload parse error: {e}")
         frappe.log_error("Invalid webhook payload")
         return {"status": "error", "message": "Invalid payload"}
 
     # Process webhook entries
     entries = payload.get("entry", [])
+    print(f"[WEBHOOK POST] Processing {len(entries)} entries")
 
     for entry in entries:
         waba_id = entry.get("id")
+        print(f"[WEBHOOK POST] Entry WABA ID: {waba_id}")
 
         if not waba_id:
             continue
 
         # Find customer by WABA ID
         customer = _find_customer_by_waba(waba_id)
+        print(f"[WEBHOOK POST] Customer found: {customer.name if customer else 'None'}")
 
         if not customer:
             frappe.log_error(f"No customer found for WABA: {waba_id}")
@@ -125,15 +136,19 @@ def _receive_meta_webhook():
 
         # Process changes in the entry
         changes = entry.get("changes", [])
+        print(f"[WEBHOOK POST] Processing {len(changes)} changes")
 
         for change in changes:
             field = change.get("field")
             value = change.get("value", {})
+            print(f"[WEBHOOK POST] Change field: {field}")
 
             # Route based on webhook type
             if field == "messages":
+                print(f"[WEBHOOK POST] Routing message webhook to customer")
                 _route_message_webhook(customer, value)
 
+    print(f"[WEBHOOK POST] Done processing, returning OK")
     # Return 200 OK quickly to avoid Meta retries
     return {"status": "ok"}
 
@@ -145,11 +160,14 @@ def _verify_signature() -> bool:
     Meta signs webhooks with HMAC-SHA256 using the app secret
     """
     signature_header = frappe.request.headers.get("X-Hub-Signature-256", "")
+    print(f"[SIGNATURE] Header: {signature_header[:50] if signature_header else 'MISSING'}...")
 
     if not signature_header:
+        print("[SIGNATURE] FAILED: No signature header")
         return False
 
     if not signature_header.startswith("sha256="):
+        print("[SIGNATURE] FAILED: Header doesn't start with sha256=")
         return False
 
     expected_signature = signature_header[7:]
@@ -158,8 +176,11 @@ def _verify_signature() -> bool:
     app_secret = settings.get_password("meta_app_secret")
 
     if not app_secret:
+        print("[SIGNATURE] FAILED: meta_app_secret not configured in settings")
         frappe.log_error("Meta app secret not configured")
         return False
+
+    print(f"[SIGNATURE] App secret configured: Yes (length={len(app_secret)})")
 
     # Calculate HMAC
     payload = frappe.request.data
@@ -169,7 +190,13 @@ def _verify_signature() -> bool:
         hashlib.sha256
     ).hexdigest()
 
-    return hmac.compare_digest(calculated, expected_signature)
+    match = hmac.compare_digest(calculated, expected_signature)
+    print(f"[SIGNATURE] Match: {match}")
+    if not match:
+        print(f"[SIGNATURE] Expected: {expected_signature[:20]}...")
+        print(f"[SIGNATURE] Calculated: {calculated[:20]}...")
+
+    return match
 
 
 def _find_customer_by_waba(waba_id: str):
