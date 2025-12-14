@@ -108,49 +108,69 @@ def _receive_meta_webhook():
         frappe.throw(_("Invalid signature"), frappe.AuthenticationError)
 
     try:
-        payload = frappe.parse_json(frappe.request.data)
-        print(f"[WEBHOOK POST] Payload parsed successfully")
+        # Try to get payload from request.data first, fall back to form_dict
+        if frappe.request.data:
+            payload = frappe.parse_json(frappe.request.data)
+            print(f"[WEBHOOK POST] Payload parsed from request.data")
+        else:
+            # Frappe might have already parsed JSON into form_dict
+            payload = dict(frappe.form_dict)
+            # Remove cmd key added by Frappe
+            payload.pop('cmd', None)
+            print(f"[WEBHOOK POST] Payload taken from form_dict")
+
+        print(f"[WEBHOOK POST] Payload type: {type(payload)}, keys: {payload.keys() if isinstance(payload, dict) else 'N/A'}")
     except Exception as e:
         print(f"[WEBHOOK POST] Payload parse error: {e}")
+        import traceback
+        traceback.print_exc()
         frappe.log_error("Invalid webhook payload")
         return {"status": "error", "message": "Invalid payload"}
 
-    # Process webhook entries
-    entries = payload.get("entry", [])
-    print(f"[WEBHOOK POST] Processing {len(entries)} entries")
+    try:
+        # Process webhook entries
+        entries = payload.get("entry", [])
+        print(f"[WEBHOOK POST] Processing {len(entries)} entries")
 
-    for entry in entries:
-        waba_id = entry.get("id")
-        print(f"[WEBHOOK POST] Entry WABA ID: {waba_id}")
+        for entry in entries:
+            waba_id = entry.get("id")
+            print(f"[WEBHOOK POST] Entry WABA ID: {waba_id}")
 
-        if not waba_id:
-            continue
+            if not waba_id:
+                continue
 
-        # Find customer by WABA ID
-        customer = _find_customer_by_waba(waba_id)
-        print(f"[WEBHOOK POST] Customer found: {customer.name if customer else 'None'}")
+            # Find customer by WABA ID
+            customer = _find_customer_by_waba(waba_id)
+            print(f"[WEBHOOK POST] Customer found: {customer.name if customer else 'None'}")
 
-        if not customer:
-            frappe.log_error(f"No customer found for WABA: {waba_id}")
-            continue
+            if not customer:
+                print(f"[WEBHOOK POST] No customer found for WABA: {waba_id}, skipping")
+                continue
 
-        # Process changes in the entry
-        changes = entry.get("changes", [])
-        print(f"[WEBHOOK POST] Processing {len(changes)} changes")
+            # Process changes in the entry
+            changes = entry.get("changes", [])
+            print(f"[WEBHOOK POST] Processing {len(changes)} changes")
 
-        for change in changes:
-            field = change.get("field")
-            value = change.get("value", {})
-            print(f"[WEBHOOK POST] Change field: {field}")
+            for change in changes:
+                field = change.get("field")
+                value = change.get("value", {})
+                print(f"[WEBHOOK POST] Change field: {field}")
 
-            # Route based on webhook type
-            if field == "messages":
-                print(f"[WEBHOOK POST] Routing message webhook to customer")
-                _route_message_webhook(customer, value)
+                # Route based on webhook type
+                if field == "messages":
+                    print(f"[WEBHOOK POST] Routing message webhook to customer")
+                    _route_message_webhook(customer, value)
 
-    print(f"[WEBHOOK POST] Done processing, returning OK")
-    # Return 200 OK quickly to avoid Meta retries
-    return {"status": "ok"}
+        print(f"[WEBHOOK POST] Done processing, returning OK")
+        # Return 200 OK quickly to avoid Meta retries
+        return {"status": "ok"}
+
+    except Exception as e:
+        print(f"[WEBHOOK POST] Error processing webhook: {e}")
+        import traceback
+        traceback.print_exc()
+        frappe.log_error(f"Webhook processing error: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 def _verify_signature() -> bool:
