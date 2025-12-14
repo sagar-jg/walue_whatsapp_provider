@@ -110,7 +110,11 @@ def _receive_meta_webhook():
     try:
         # Try to get payload from request.data first, fall back to form_dict
         if frappe.request.data:
-            payload = frappe.parse_json(frappe.request.data)
+            import json
+            raw_data = frappe.request.data
+            if isinstance(raw_data, bytes):
+                raw_data = raw_data.decode('utf-8')
+            payload = json.loads(raw_data)
             print(f"[WEBHOOK POST] Payload parsed from request.data")
         else:
             # Frappe might have already parsed JSON into form_dict
@@ -119,7 +123,7 @@ def _receive_meta_webhook():
             payload.pop('cmd', None)
             print(f"[WEBHOOK POST] Payload taken from form_dict")
 
-        print(f"[WEBHOOK POST] Payload type: {type(payload)}, keys: {payload.keys() if isinstance(payload, dict) else 'N/A'}")
+        print(f"[WEBHOOK POST] Payload type: {type(payload)}, keys: {list(payload.keys()) if isinstance(payload, dict) else 'N/A'}")
     except Exception as e:
         print(f"[WEBHOOK POST] Payload parse error: {e}")
         import traceback
