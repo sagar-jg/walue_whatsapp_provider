@@ -132,6 +132,10 @@ ERR_CUSTOMER_NOT_FOUND = "Customer account not found."
 ERR_INVALID_TOKEN = "Invalid or expired token."
 ERR_INSUFFICIENT_BALANCE = "Insufficient account balance."
 ERR_SESSION_EXPIRED = "Session expired. Please reconnect."
+ERR_MESSAGE_LIMIT_EXCEEDED = "Monthly message limit exceeded. Please upgrade your plan."
+ERR_CALL_LIMIT_EXCEEDED = "Monthly call minute limit exceeded. Please upgrade your plan."
+ERR_DAILY_MESSAGE_LIMIT = "Daily message limit exceeded. Please try again tomorrow."
+ERR_DAILY_CALL_LIMIT = "Daily call limit exceeded. Please try again tomorrow."
 
 # =============================================================================
 # HTTP STATUS CODES
@@ -191,3 +195,14 @@ INVOICE_STATUS_OVERDUE = "Overdue"
 USAGE_WARNING_THRESHOLD = 0.75  # 75% of quota
 USAGE_ALERT_THRESHOLD = 0.90  # 90% of quota
 USAGE_EXCEEDED_THRESHOLD = 1.0  # 100% of quota
+
+# =============================================================================
+# RATE LIMITING CONFIGURATION
+# =============================================================================
+
+RATE_LIMIT_WINDOW = 60  # Window in seconds (1 minute)
+RATE_LIMIT_MESSAGES = 60  # Max messages per minute per customer
+RATE_LIMIT_MEDIA = 30  # Max media messages per minute per customer
+RATE_LIMIT_CALLS_INITIATE = 10  # Max call initiations per minute per customer
+RATE_LIMIT_CALLS_CONNECT = 10  # Max call connect requests per minute per customer
+RATE_LIMIT_PERMISSION = 5  # Max permission requests per minute per customer

@@ -273,6 +273,101 @@ def get_billing_info():
     }
 
 
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def sync_business_verification():
+    """
+    Sync business verification status from Meta API
+
+    This updates the customer's business verification status, quality rating,
+    and messaging limit tier from Meta Business Manager.
+
+    POST Body (JSON):
+        verification_status: 'not_started', 'pending', 'verified', 'failed'
+        quality_rating: 'GREEN', 'YELLOW', 'RED' (optional)
+        messaging_limit_tier: 'TIER_1K', 'TIER_10K', 'TIER_100K', 'TIER_UNLIMITED' (optional)
+
+    Returns:
+        dict: Updated verification info
+    """
+    customer_info = _authenticate_request()
+    customer_id = customer_info["customer_id"]
+
+    data = frappe.parse_json(frappe.request.data)
+
+    verification_status = data.get("verification_status")
+    quality_rating = data.get("quality_rating")
+    messaging_limit_tier = data.get("messaging_limit_tier")
+
+    customer = frappe.get_doc("WhatsApp Customer", customer_id)
+
+    # Map incoming status to our format
+    status_map = {
+        "not_started": "Not Started",
+        "pending": "Pending",
+        "verified": "Verified",
+        "failed": "Failed",
+    }
+
+    # Map messaging limit tier
+    tier_map = {
+        "TIER_1K": "Tier 1 (1K/day)",
+        "TIER_10K": "Tier 2 (10K/day)",
+        "TIER_100K": "Tier 3 (100K/day)",
+        "TIER_UNLIMITED": "Tier 4 (Unlimited)",
+    }
+
+    # Update verification status
+    if verification_status:
+        new_status = status_map.get(verification_status.lower(), verification_status)
+        customer.business_verification_status = new_status
+
+        if new_status == "Verified":
+            customer.verification_date = date.today()
+
+    # Update quality rating
+    if quality_rating:
+        customer.account_quality_rating = quality_rating.capitalize()
+
+    # Update messaging limit tier
+    if messaging_limit_tier:
+        customer.messaging_limit_tier = tier_map.get(messaging_limit_tier, messaging_limit_tier)
+
+    customer.last_quality_check = datetime.now()
+    customer.save(ignore_permissions=True)
+    frappe.db.commit()
+
+    return {
+        "success": True,
+        "verification_status": customer.business_verification_status,
+        "quality_rating": customer.account_quality_rating,
+        "messaging_limit_tier": customer.messaging_limit_tier,
+        "last_quality_check": str(customer.last_quality_check),
+    }
+
+
+@frappe.whitelist(allow_guest=True, methods=["GET"])
+def get_verification_status():
+    """
+    Get current business verification status for customer
+
+    Returns:
+        dict: Current verification status and quality metrics
+    """
+    customer_info = _authenticate_request()
+    customer_id = customer_info["customer_id"]
+
+    customer = frappe.get_doc("WhatsApp Customer", customer_id)
+
+    return {
+        "customer_id": customer_id,
+        "business_verification_status": customer.business_verification_status or "Not Started",
+        "verification_date": str(customer.verification_date) if customer.verification_date else None,
+        "account_quality_rating": customer.account_quality_rating,
+        "messaging_limit_tier": customer.messaging_limit_tier,
+        "last_quality_check": str(customer.last_quality_check) if customer.last_quality_check else None,
+    }
+
+
 def _get_balance_info(customer_id: str) -> dict:
     """Get customer balance and quota status"""
     customer = frappe.get_doc("WhatsApp Customer", customer_id)

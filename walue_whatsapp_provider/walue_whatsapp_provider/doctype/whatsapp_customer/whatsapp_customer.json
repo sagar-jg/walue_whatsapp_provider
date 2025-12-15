@@ -20,6 +20,13 @@
         "column_break_waba",
         "waba_id",
         "phone_number_id",
+        "business_verification_section",
+        "business_verification_status",
+        "verification_date",
+        "column_break_verification",
+        "account_quality_rating",
+        "messaging_limit_tier",
+        "last_quality_check",
         "oauth_section",
         "oauth_client_id",
         "oauth_client_secret",
@@ -126,6 +133,55 @@
             "label": "Phone Number ID",
             "read_only": 1,
             "description": "Registered phone number ID (reference only)"
+        },
+        {
+            "fieldname": "business_verification_section",
+            "fieldtype": "Section Break",
+            "label": "Business Verification",
+            "collapsible": 1
+        },
+        {
+            "fieldname": "business_verification_status",
+            "fieldtype": "Select",
+            "label": "Business Verification Status",
+            "options": "Not Started\nPending\nVerified\nFailed",
+            "default": "Not Started",
+            "in_list_view": 1,
+            "description": "Meta Business Verification status"
+        },
+        {
+            "fieldname": "verification_date",
+            "fieldtype": "Date",
+            "label": "Verification Date",
+            "read_only": 1,
+            "description": "Date when business was verified"
+        },
+        {
+            "fieldname": "column_break_verification",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "account_quality_rating",
+            "fieldtype": "Select",
+            "label": "Account Quality Rating",
+            "options": "\nGreen\nYellow\nRed",
+            "read_only": 1,
+            "description": "Meta's quality rating for this account"
+        },
+        {
+            "fieldname": "messaging_limit_tier",
+            "fieldtype": "Select",
+            "label": "Messaging Limit Tier",
+            "options": "\nTier 1 (1K/day)\nTier 2 (10K/day)\nTier 3 (100K/day)\nTier 4 (Unlimited)",
+            "read_only": 1,
+            "description": "Current WhatsApp messaging limit tier"
+        },
+        {
+            "fieldname": "last_quality_check",
+            "fieldtype": "Datetime",
+            "label": "Last Quality Check",
+            "read_only": 1,
+            "description": "Last time quality metrics were checked"
         },
         {
             "fieldname": "oauth_section",

@@ -25,6 +25,13 @@ from walue_whatsapp_provider.constants import (
     CUSTOMER_STATUS_ACTIVE,
 )
 from walue_whatsapp_provider.api.oauth import validate_token
+from walue_whatsapp_provider.api.billing import (
+    enforce_quota,
+    deduct_balance,
+    check_and_send_balance_alerts,
+    get_billing_response_headers,
+)
+from walue_whatsapp_provider.api.rate_limit import enforce_rate_limit
 
 
 def _authenticate_request() -> dict:
@@ -70,6 +77,9 @@ def send_template():
     """
     customer_info = _authenticate_request()
 
+    # Enforce rate limit
+    enforce_rate_limit(customer_info["customer_id"], "send_template")
+
     # Parse request body
     data = frappe.parse_json(frappe.request.data)
 
@@ -82,6 +92,12 @@ def send_template():
 
     if not all([phone_number_id, access_token, to_number, template_name]):
         frappe.throw(_("Missing required parameters"))
+
+    # CRITICAL: Check quota and balance BEFORE calling Meta API
+    quota_check = enforce_quota(
+        customer_id=customer_info["customer_id"],
+        operation_type="message",
+    )
 
     # Build Meta API request
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/messages"
@@ -126,13 +142,22 @@ def send_template():
             message_type="template",
         )
 
-        # Calculate cost (simplified - actual implementation needs rate cards)
+        # Calculate and deduct cost
         cost = _calculate_message_cost(template_name)
+        deduct_balance(customer_info["customer_id"], cost, "Template message sent")
+
+        # Check and send balance alerts if needed
+        check_and_send_balance_alerts(customer_info["customer_id"])
+
+        # Get billing headers for response
+        billing_headers = get_billing_response_headers(customer_info["customer_id"])
 
         return {
             "success": True,
             "message_id": message_id,
             "cost": cost,
+            "balance": billing_headers.get("X-Walue-Balance"),
+            "quota_status": billing_headers.get("X-Walue-Quota-Status"),
         }
 
     except requests.RequestException as e:
@@ -163,6 +188,9 @@ def send_text():
     """
     customer_info = _authenticate_request()
 
+    # Enforce rate limit
+    enforce_rate_limit(customer_info["customer_id"], "send_text")
+
     # Parse request body
     data = frappe.parse_json(frappe.request.data)
 
@@ -173,6 +201,14 @@ def send_text():
 
     if not all([phone_number_id, access_token, to_number, text]):
         frappe.throw(_("Missing required parameters"))
+
+    # CRITICAL: Check quota and balance BEFORE calling Meta API
+    # Text messages are free within conversation window, but still count toward quota
+    quota_check = enforce_quota(
+        customer_id=customer_info["customer_id"],
+        operation_type="message",
+        estimated_cost=0.0,  # Free within conversation window
+    )
 
     # Build Meta API request
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/messages"
@@ -215,10 +251,15 @@ def send_text():
         # Free-form messages are typically free within conversation window
         cost = 0.0
 
+        # Get billing headers for response
+        billing_headers = get_billing_response_headers(customer_info["customer_id"])
+
         return {
             "success": True,
             "message_id": message_id,
             "cost": cost,
+            "balance": billing_headers.get("X-Walue-Balance"),
+            "quota_status": billing_headers.get("X-Walue-Quota-Status"),
         }
 
     except requests.RequestException as e:
@@ -248,6 +289,9 @@ def send_media():
     """
     customer_info = _authenticate_request()
 
+    # Enforce rate limit (media has lower limit)
+    enforce_rate_limit(customer_info["customer_id"], "send_media")
+
     data = frappe.parse_json(frappe.request.data)
 
     phone_number_id = data.get("phone_number_id")
@@ -263,6 +307,14 @@ def send_media():
 
     if media_type not in ["image", "video", "document", "audio"]:
         frappe.throw(_("Invalid media_type"))
+
+    # CRITICAL: Check quota and balance BEFORE calling Meta API
+    # Media messages are free within conversation window, but still count toward quota
+    quota_check = enforce_quota(
+        customer_id=customer_info["customer_id"],
+        operation_type="message",
+        estimated_cost=0.0,  # Free within conversation window
+    )
 
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/messages"
 
@@ -300,10 +352,15 @@ def send_media():
             message_type="media",
         )
 
+        # Get billing headers for response
+        billing_headers = get_billing_response_headers(customer_info["customer_id"])
+
         return {
             "success": True,
             "message_id": message_id,
             "cost": 0.0,  # Media within conversation window is free
+            "balance": billing_headers.get("X-Walue-Balance"),
+            "quota_status": billing_headers.get("X-Walue-Quota-Status"),
         }
 
     except requests.RequestException as e:

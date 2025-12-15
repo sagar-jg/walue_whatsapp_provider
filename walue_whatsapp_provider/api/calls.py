@@ -29,6 +29,13 @@ from walue_whatsapp_provider.constants import (
     CUSTOMER_STATUS_ACTIVE,
 )
 from walue_whatsapp_provider.api.oauth import validate_token
+from walue_whatsapp_provider.api.billing import (
+    enforce_quota,
+    deduct_balance,
+    check_and_send_balance_alerts,
+    get_billing_response_headers,
+)
+from walue_whatsapp_provider.api.rate_limit import enforce_rate_limit
 
 
 def _authenticate_request() -> dict:
@@ -199,6 +206,9 @@ def initiate():
     """
     customer_info = _authenticate_request()
 
+    # Enforce rate limit
+    enforce_rate_limit(customer_info["customer_id"], "initiate")
+
     data = frappe.parse_json(frappe.request.data)
 
     phone_number_id = data.get("phone_number_id")
@@ -217,6 +227,13 @@ def initiate():
             "error": MSG_CALLING_NOT_AVAILABLE,
             "restricted": True,
         }
+
+    # CRITICAL: Check quota and balance BEFORE creating Janus session
+    # Estimated cost is for 1 minute minimum - actual cost calculated at end()
+    quota_check = enforce_quota(
+        customer_id=customer_info["customer_id"],
+        operation_type="call",
+    )
 
     # Generate unique call session ID
     call_session_id = secrets.token_urlsafe(24)
@@ -246,6 +263,9 @@ def initiate():
         settings = frappe.get_single("WhatsApp Provider Settings")
         ice_servers = _get_ice_servers(settings)
 
+        # Get billing headers for response
+        billing_headers = get_billing_response_headers(customer_info["customer_id"])
+
         return {
             "success": True,
             "call_session_id": call_session_id,
@@ -254,6 +274,8 @@ def initiate():
             "janus_room_id": janus_session.get("room_id"),
             "janus_ws_url": settings.janus_ws_url,
             "ice_servers": ice_servers,
+            "balance": billing_headers.get("X-Walue-Balance"),
+            "quota_status": billing_headers.get("X-Walue-Quota-Status"),
         }
 
     except Exception as e:
@@ -313,8 +335,17 @@ def end():
         cost=cost,
     )
 
+    # Deduct actual cost from customer balance
+    deduct_balance(customer_info["customer_id"], cost["total_cost"], "Call charge")
+
+    # Check and send balance alerts if needed
+    check_and_send_balance_alerts(customer_info["customer_id"])
+
     # Remove session from cache
     frappe.cache().delete_value(f"call_session:{call_session_id}")
+
+    # Get billing headers for response
+    billing_headers = get_billing_response_headers(customer_info["customer_id"])
 
     return {
         "success": True,
@@ -323,7 +354,9 @@ def end():
         "breakdown": {
             "base_cost": cost["base_cost"],
             "markup": cost["markup"],
-        }
+        },
+        "balance": billing_headers.get("X-Walue-Balance"),
+        "quota_status": billing_headers.get("X-Walue-Quota-Status"),
     }
 
 
@@ -616,6 +649,9 @@ def connect():
     """
     customer_info = _authenticate_request()
 
+    # Enforce rate limit
+    enforce_rate_limit(customer_info["customer_id"], "connect")
+
     data = frappe.parse_json(frappe.request.data)
 
     phone_number_id = data.get("phone_number_id")
@@ -634,6 +670,12 @@ def connect():
             "error": MSG_CALLING_NOT_AVAILABLE,
             "restricted": True,
         }
+
+    # CRITICAL: Check quota and balance BEFORE calling Meta API
+    quota_check = enforce_quota(
+        customer_id=customer_info["customer_id"],
+        operation_type="call",
+    )
 
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
 
@@ -662,10 +704,15 @@ def connect():
 
         call_id = response_data.get("call_id")
 
+        # Get billing headers for response
+        billing_headers = get_billing_response_headers(customer_info["customer_id"])
+
         return {
             "success": True,
             "call_id": call_id,
             "message": "Call initiated, waiting for user to accept",
+            "balance": billing_headers.get("X-Walue-Balance"),
+            "quota_status": billing_headers.get("X-Walue-Quota-Status"),
         }
 
     except requests.RequestException as e:
@@ -1120,6 +1167,10 @@ def connect():
         dict: Contains call_id for the initiated call
     """
     customer_info = _authenticate_request()
+
+    # Enforce rate limit
+    enforce_rate_limit(customer_info["customer_id"], "connect")
+
     data = frappe.parse_json(frappe.request.data)
 
     phone_number_id = data.get("phone_number_id")
@@ -1138,6 +1189,12 @@ def connect():
             "error": MSG_CALLING_NOT_AVAILABLE,
             "restricted": True,
         }
+
+    # CRITICAL: Check quota and balance BEFORE calling Meta API
+    quota_check = enforce_quota(
+        customer_id=customer_info["customer_id"],
+        operation_type="call",
+    )
 
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
 
@@ -1165,10 +1222,15 @@ def connect():
 
         call_id = response_data.get("call_id")
 
+        # Get billing headers for response
+        billing_headers = get_billing_response_headers(customer_info["customer_id"])
+
         return {
             "success": True,
             "call_id": call_id,
             "message": "Call initiated successfully",
+            "balance": billing_headers.get("X-Walue-Balance"),
+            "quota_status": billing_headers.get("X-Walue-Quota-Status"),
         }
 
     except requests.RequestException as e:

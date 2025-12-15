@@ -16,6 +16,12 @@
         "column_break_pricing",
         "included_calls",
         "included_messages",
+        "quota_limits_section",
+        "message_limit",
+        "call_minute_limit",
+        "column_break_quota",
+        "daily_message_limit",
+        "daily_call_limit",
         "features_section",
         "features_json",
         "description"
@@ -84,6 +90,44 @@
             "label": "Included Messages",
             "default": 0,
             "description": "Number of free messages included per month"
+        },
+        {
+            "fieldname": "quota_limits_section",
+            "fieldtype": "Section Break",
+            "label": "Quota Limits",
+            "description": "Set to 0 for unlimited"
+        },
+        {
+            "fieldname": "message_limit",
+            "fieldtype": "Int",
+            "label": "Monthly Message Limit",
+            "default": 0,
+            "description": "Maximum messages per month (0 = unlimited)"
+        },
+        {
+            "fieldname": "call_minute_limit",
+            "fieldtype": "Int",
+            "label": "Monthly Call Minute Limit",
+            "default": 0,
+            "description": "Maximum call minutes per month (0 = unlimited)"
+        },
+        {
+            "fieldname": "column_break_quota",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "daily_message_limit",
+            "fieldtype": "Int",
+            "label": "Daily Message Limit",
+            "default": 0,
+            "description": "Maximum messages per day (0 = unlimited)"
+        },
+        {
+            "fieldname": "daily_call_limit",
+            "fieldtype": "Int",
+            "label": "Daily Call Limit",
+            "default": 0,
+            "description": "Maximum calls per day (0 = unlimited)"
         },
         {
             "fieldname": "features_section",
