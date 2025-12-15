@@ -28,33 +28,8 @@ from walue_whatsapp_provider.constants import (
     MSG_CALLING_NOT_AVAILABLE,
     CUSTOMER_STATUS_ACTIVE,
 )
-from walue_whatsapp_provider.api.oauth import validate_token
-from walue_whatsapp_provider.api.billing import (
-    enforce_quota,
-    deduct_balance,
-    check_and_send_balance_alerts,
-    get_billing_response_headers,
-)
+from walue_whatsapp_provider.utils.auth import authenticate_request as _authenticate_request
 from walue_whatsapp_provider.api.rate_limit import enforce_rate_limit
-
-
-def _authenticate_request() -> dict:
-    """Authenticate the request using Bearer token"""
-    auth_header = frappe.request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        frappe.throw(_(ERR_INVALID_TOKEN), frappe.AuthenticationError)
-
-    token = auth_header.split(" ")[1]
-    customer_info = validate_token(token)
-
-    if not customer_info:
-        frappe.throw(_(ERR_INVALID_TOKEN), frappe.AuthenticationError)
-
-    customer = frappe.get_doc("WhatsApp Customer", customer_info["customer_id"])
-    if customer.status != CUSTOMER_STATUS_ACTIVE:
-        frappe.throw(_("Customer account is not active"), frappe.AuthenticationError)
-
-    return customer_info
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
@@ -81,6 +56,9 @@ def request_permission():
     Note: Permission status is tracked in CUSTOMER's app, not here
     """
     customer_info = _authenticate_request()
+
+    # Enforce rate limit for permission requests
+    enforce_rate_limit(customer_info["customer_id"], "request_permission")
 
     data = frappe.parse_json(frappe.request.data)
 
@@ -206,7 +184,7 @@ def initiate():
     """
     customer_info = _authenticate_request()
 
-    # Enforce rate limit
+    # Enforce rate limit for call initiation
     enforce_rate_limit(customer_info["customer_id"], "initiate")
 
     data = frappe.parse_json(frappe.request.data)
@@ -227,13 +205,6 @@ def initiate():
             "error": MSG_CALLING_NOT_AVAILABLE,
             "restricted": True,
         }
-
-    # CRITICAL: Check quota and balance BEFORE creating Janus session
-    # Estimated cost is for 1 minute minimum - actual cost calculated at end()
-    quota_check = enforce_quota(
-        customer_id=customer_info["customer_id"],
-        operation_type="call",
-    )
 
     # Generate unique call session ID
     call_session_id = secrets.token_urlsafe(24)
@@ -263,9 +234,6 @@ def initiate():
         settings = frappe.get_single("WhatsApp Provider Settings")
         ice_servers = _get_ice_servers(settings)
 
-        # Get billing headers for response
-        billing_headers = get_billing_response_headers(customer_info["customer_id"])
-
         return {
             "success": True,
             "call_session_id": call_session_id,
@@ -274,8 +242,6 @@ def initiate():
             "janus_room_id": janus_session.get("room_id"),
             "janus_ws_url": settings.janus_ws_url,
             "ice_servers": ice_servers,
-            "balance": billing_headers.get("X-Walue-Balance"),
-            "quota_status": billing_headers.get("X-Walue-Quota-Status"),
         }
 
     except Exception as e:
@@ -335,17 +301,8 @@ def end():
         cost=cost,
     )
 
-    # Deduct actual cost from customer balance
-    deduct_balance(customer_info["customer_id"], cost["total_cost"], "Call charge")
-
-    # Check and send balance alerts if needed
-    check_and_send_balance_alerts(customer_info["customer_id"])
-
     # Remove session from cache
     frappe.cache().delete_value(f"call_session:{call_session_id}")
-
-    # Get billing headers for response
-    billing_headers = get_billing_response_headers(customer_info["customer_id"])
 
     return {
         "success": True,
@@ -354,9 +311,7 @@ def end():
         "breakdown": {
             "base_cost": cost["base_cost"],
             "markup": cost["markup"],
-        },
-        "balance": billing_headers.get("X-Walue-Balance"),
-        "quota_status": billing_headers.get("X-Walue-Quota-Status"),
+        }
     }
 
 
@@ -649,7 +604,7 @@ def connect():
     """
     customer_info = _authenticate_request()
 
-    # Enforce rate limit
+    # Enforce rate limit for call connections
     enforce_rate_limit(customer_info["customer_id"], "connect")
 
     data = frappe.parse_json(frappe.request.data)
@@ -670,12 +625,6 @@ def connect():
             "error": MSG_CALLING_NOT_AVAILABLE,
             "restricted": True,
         }
-
-    # CRITICAL: Check quota and balance BEFORE calling Meta API
-    quota_check = enforce_quota(
-        customer_id=customer_info["customer_id"],
-        operation_type="call",
-    )
 
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
 
@@ -704,15 +653,10 @@ def connect():
 
         call_id = response_data.get("call_id")
 
-        # Get billing headers for response
-        billing_headers = get_billing_response_headers(customer_info["customer_id"])
-
         return {
             "success": True,
             "call_id": call_id,
             "message": "Call initiated, waiting for user to accept",
-            "balance": billing_headers.get("X-Walue-Balance"),
-            "quota_status": billing_headers.get("X-Walue-Quota-Status"),
         }
 
     except requests.RequestException as e:
@@ -922,317 +866,3 @@ def _record_call_metric(customer_id: str, duration_seconds: int, cost: dict):
         }).insert(ignore_permissions=True)
 
     frappe.db.commit()
-
-
-# =============================================================================
-# WhatsApp Business Calling API - Call Signaling Endpoints
-# =============================================================================
-
-
-@frappe.whitelist(allow_guest=True, methods=["POST"])
-def pre_accept():
-    """
-    Send pre-accept signal for incoming call with SDP answer
-
-    This is the first step in accepting a call. After receiving a call_connect
-    webhook, the customer app generates an SDP answer and sends it here.
-
-    POST Body (JSON):
-        phone_number_id: Customer's WhatsApp phone number ID
-        access_token: Customer's Meta access token
-        call_id: The call ID from call_connect webhook
-        sdp: SDP answer from WebRTC
-
-    Returns:
-        dict: Success status
-    """
-    customer_info = _authenticate_request()
-    data = frappe.parse_json(frappe.request.data)
-
-    phone_number_id = data.get("phone_number_id")
-    access_token = data.get("access_token")
-    call_id = data.get("call_id")
-    sdp = data.get("sdp")
-
-    if not all([phone_number_id, access_token, call_id, sdp]):
-        frappe.throw(_("Missing required parameters"))
-
-    url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-    }
-
-    payload = {
-        "call_id": call_id,
-        "action": "pre_accept",
-        "session": {
-            "sdp_type": "answer",
-            "sdp": sdp
-        }
-    }
-
-    try:
-        response = requests.post(url, json=payload, headers=headers)
-        response_data = response.json()
-
-        if response.status_code != 200:
-            error_msg = response_data.get("error", {}).get("message", ERR_META_API)
-            return {"success": False, "error": error_msg}
-
-        return {
-            "success": True,
-            "message": "Pre-accept sent successfully",
-        }
-
-    except requests.RequestException as e:
-        frappe.log_error(f"Meta API pre_accept failed: {str(e)}")
-        return {"success": False, "error": ERR_META_API}
-
-
-@frappe.whitelist(allow_guest=True, methods=["POST"])
-def accept():
-    """
-    Accept the call after pre_accept
-
-    This is sent after pre_accept is successful to fully accept the call.
-
-    POST Body (JSON):
-        phone_number_id: Customer's WhatsApp phone number ID
-        access_token: Customer's Meta access token
-        call_id: The call ID from call_connect webhook
-
-    Returns:
-        dict: Success status
-    """
-    customer_info = _authenticate_request()
-    data = frappe.parse_json(frappe.request.data)
-
-    phone_number_id = data.get("phone_number_id")
-    access_token = data.get("access_token")
-    call_id = data.get("call_id")
-
-    if not all([phone_number_id, access_token, call_id]):
-        frappe.throw(_("Missing required parameters"))
-
-    url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-    }
-
-    payload = {
-        "call_id": call_id,
-        "action": "accept"
-    }
-
-    try:
-        response = requests.post(url, json=payload, headers=headers)
-        response_data = response.json()
-
-        if response.status_code != 200:
-            error_msg = response_data.get("error", {}).get("message", ERR_META_API)
-            return {"success": False, "error": error_msg}
-
-        return {
-            "success": True,
-            "message": "Call accepted successfully",
-        }
-
-    except requests.RequestException as e:
-        frappe.log_error(f"Meta API accept failed: {str(e)}")
-        return {"success": False, "error": ERR_META_API}
-
-
-@frappe.whitelist(allow_guest=True, methods=["POST"])
-def reject():
-    """
-    Reject an incoming call
-
-    POST Body (JSON):
-        phone_number_id: Customer's WhatsApp phone number ID
-        access_token: Customer's Meta access token
-        call_id: The call ID from call_connect webhook
-
-    Returns:
-        dict: Success status
-    """
-    customer_info = _authenticate_request()
-    data = frappe.parse_json(frappe.request.data)
-
-    phone_number_id = data.get("phone_number_id")
-    access_token = data.get("access_token")
-    call_id = data.get("call_id")
-
-    if not all([phone_number_id, access_token, call_id]):
-        frappe.throw(_("Missing required parameters"))
-
-    url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-    }
-
-    payload = {
-        "call_id": call_id,
-        "action": "reject"
-    }
-
-    try:
-        response = requests.post(url, json=payload, headers=headers)
-        response_data = response.json()
-
-        if response.status_code != 200:
-            error_msg = response_data.get("error", {}).get("message", ERR_META_API)
-            return {"success": False, "error": error_msg}
-
-        return {
-            "success": True,
-            "message": "Call rejected",
-        }
-
-    except requests.RequestException as e:
-        frappe.log_error(f"Meta API reject failed: {str(e)}")
-        return {"success": False, "error": ERR_META_API}
-
-
-@frappe.whitelist(allow_guest=True, methods=["POST"])
-def terminate():
-    """
-    Terminate an active call
-
-    POST Body (JSON):
-        phone_number_id: Customer's WhatsApp phone number ID
-        access_token: Customer's Meta access token
-        call_id: The call ID
-
-    Returns:
-        dict: Success status
-    """
-    customer_info = _authenticate_request()
-    data = frappe.parse_json(frappe.request.data)
-
-    phone_number_id = data.get("phone_number_id")
-    access_token = data.get("access_token")
-    call_id = data.get("call_id")
-
-    if not all([phone_number_id, access_token, call_id]):
-        frappe.throw(_("Missing required parameters"))
-
-    url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-    }
-
-    payload = {
-        "call_id": call_id,
-        "action": "terminate"
-    }
-
-    try:
-        response = requests.post(url, json=payload, headers=headers)
-        response_data = response.json()
-
-        if response.status_code != 200:
-            error_msg = response_data.get("error", {}).get("message", ERR_META_API)
-            return {"success": False, "error": error_msg}
-
-        return {
-            "success": True,
-            "message": "Call terminated",
-        }
-
-    except requests.RequestException as e:
-        frappe.log_error(f"Meta API terminate failed: {str(e)}")
-        return {"success": False, "error": ERR_META_API}
-
-
-@frappe.whitelist(allow_guest=True, methods=["POST"])
-def connect():
-    """
-    Initiate an outbound call with SDP offer
-
-    POST Body (JSON):
-        phone_number_id: Customer's WhatsApp phone number ID
-        access_token: Customer's Meta access token
-        to: Recipient phone number (E.164 format)
-        sdp: SDP offer from WebRTC
-
-    Returns:
-        dict: Contains call_id for the initiated call
-    """
-    customer_info = _authenticate_request()
-
-    # Enforce rate limit
-    enforce_rate_limit(customer_info["customer_id"], "connect")
-
-    data = frappe.parse_json(frappe.request.data)
-
-    phone_number_id = data.get("phone_number_id")
-    access_token = data.get("access_token")
-    to_number = data.get("to")
-    sdp = data.get("sdp")
-
-    if not all([phone_number_id, access_token, to_number, sdp]):
-        frappe.throw(_("Missing required parameters"))
-
-    # Check if calling is available for this region
-    country_code = _extract_country_code(to_number)
-    if country_code in CALLING_RESTRICTED_COUNTRIES:
-        return {
-            "success": False,
-            "error": MSG_CALLING_NOT_AVAILABLE,
-            "restricted": True,
-        }
-
-    # CRITICAL: Check quota and balance BEFORE calling Meta API
-    quota_check = enforce_quota(
-        customer_id=customer_info["customer_id"],
-        operation_type="call",
-    )
-
-    url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-    }
-
-    payload = {
-        "to": to_number,
-        "action": "connect",
-        "session": {
-            "sdp_type": "offer",
-            "sdp": sdp
-        }
-    }
-
-    try:
-        response = requests.post(url, json=payload, headers=headers)
-        response_data = response.json()
-
-        if response.status_code != 200:
-            error_msg = response_data.get("error", {}).get("message", ERR_META_API)
-            return {"success": False, "error": error_msg}
-
-        call_id = response_data.get("call_id")
-
-        # Get billing headers for response
-        billing_headers = get_billing_response_headers(customer_info["customer_id"])
-
-        return {
-            "success": True,
-            "call_id": call_id,
-            "message": "Call initiated successfully",
-            "balance": billing_headers.get("X-Walue-Balance"),
-            "quota_status": billing_headers.get("X-Walue-Quota-Status"),
-        }
-
-    except requests.RequestException as e:
-        frappe.log_error(f"Meta API connect failed: {str(e)}")
-        return {"success": False, "error": ERR_META_API}

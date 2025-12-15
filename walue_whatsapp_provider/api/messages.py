@@ -1,14 +1,17 @@
 """
 Message Management API - Proxy to Meta WhatsApp Business API
 
-This module proxies message requests to the Meta API.
-CRITICAL: We do NOT store message content - only count and cost metrics.
+This module proxies ALL message requests through the provider for billing.
 
-The customer app:
-1. Sends message request with their WABA credentials
-2. We proxy to Meta API
-3. Return message_id to customer
-4. Record only: customer_id, date, count, cost (NO content)
+Flow:
+1. Customer authenticates with OAuth credentials
+2. Customer passes their Meta token in X-Meta-Token header
+3. Provider checks quota/balance BEFORE calling Meta
+4. Provider proxies request to Meta API
+5. Provider records usage and deducts balance SYNCHRONOUSLY
+6. Provider returns response to customer
+
+CRITICAL: We do NOT store message content - only count and cost metrics.
 """
 
 import frappe
@@ -20,93 +23,109 @@ from walue_whatsapp_provider.constants import (
     META_API_BASE_URL,
     META_API_DEFAULT_VERSION,
     ERR_META_API,
-    ERR_INVALID_TOKEN,
-    ERR_CUSTOMER_NOT_FOUND,
-    CUSTOMER_STATUS_ACTIVE,
 )
-from walue_whatsapp_provider.api.oauth import validate_token
-from walue_whatsapp_provider.api.billing import (
+from walue_whatsapp_provider.utils.auth import (
+    authenticate_request,
+    get_meta_token,
     enforce_quota,
     deduct_balance,
-    check_and_send_balance_alerts,
-    get_billing_response_headers,
 )
 from walue_whatsapp_provider.api.rate_limit import enforce_rate_limit
 
 
-def _authenticate_request() -> dict:
-    """
-    Authenticate the request using Bearer token
-    Returns customer info if valid, throws error if not
-    """
-    auth_header = frappe.request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        frappe.throw(_(ERR_INVALID_TOKEN), frappe.AuthenticationError)
+# =============================================================================
+# PRICING CONFIGURATION (move to settings/rate cards later)
+# =============================================================================
 
-    token = auth_header.split(" ")[1]
-    customer_info = validate_token(token)
+# Base costs (Meta's approximate pricing - varies by country)
+TEMPLATE_MESSAGE_COST = 0.005  # $0.005 per template message
+TEXT_MESSAGE_COST = 0.0       # Free within 24h window
+MEDIA_MESSAGE_COST = 0.0      # Free within 24h window
 
-    if not customer_info:
-        frappe.throw(_(ERR_INVALID_TOKEN), frappe.AuthenticationError)
+# Markup (provider's margin)
+DEFAULT_MARKUP_PERCENTAGE = 0.35  # 35% markup
 
-    # Verify customer is active
-    customer = frappe.get_doc("WhatsApp Customer", customer_info["customer_id"])
-    if customer.status != CUSTOMER_STATUS_ACTIVE:
-        frappe.throw(_("Customer account is not active"), frappe.AuthenticationError)
 
-    return customer_info
+def _get_customer_markup(customer_id: str) -> float:
+    """Get customer's markup percentage from subscription plan"""
+    plan_name = frappe.db.get_value("WhatsApp Customer", customer_id, "subscription_plan")
+    if plan_name:
+        markup = frappe.db.get_value("Subscription Plan", plan_name, "message_markup_percentage")
+        if markup:
+            return markup / 100
+    return DEFAULT_MARKUP_PERCENTAGE
+
+
+def _calculate_total_cost(base_cost: float, customer_id: str) -> dict:
+    """Calculate total cost including markup"""
+    markup_rate = _get_customer_markup(customer_id)
+    markup = base_cost * markup_rate
+    total = base_cost + markup
+
+    return {
+        "base_cost": round(base_cost, 6),
+        "markup": round(markup, 6),
+        "total_cost": round(total, 6),
+        "markup_percentage": markup_rate * 100,
+    }
+
+
+# =============================================================================
+# MESSAGE PROXY ENDPOINTS
+# =============================================================================
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
 def send_template():
     """
-    Send a template message via Meta WhatsApp Business API
+    Proxy: Send template message via Meta WhatsApp Business API
+
+    Headers Required:
+        X-Client-ID: Customer's OAuth client ID
+        X-Client-Secret: Customer's OAuth client secret
+        X-Meta-Token: Customer's Meta access token
 
     POST Body (JSON):
         phone_number_id: Customer's WhatsApp phone number ID
-        access_token: Customer's Meta access token
         to: Recipient phone number (E.164 format)
         template_name: Name of the approved template
         template_language: Language code (e.g., 'en_US')
         template_components: Optional template variable values
 
     Returns:
-        dict: Contains message_id and cost info
-
-    Note: Message content is NOT stored - only metrics
+        dict: Contains message_id, cost info, and new balance
     """
-    customer_info = _authenticate_request()
+    # 1. Authenticate customer
+    customer_info = authenticate_request()
+    customer_id = customer_info["customer_id"]
 
-    # Enforce rate limit
-    enforce_rate_limit(customer_info["customer_id"], "send_template")
+    # 2. Enforce rate limit
+    enforce_rate_limit(customer_id, "send_template")
 
-    # Parse request body
+    # 3. Get Meta token from header
+    access_token = get_meta_token()
+
+    # 3. Parse request body
     data = frappe.parse_json(frappe.request.data)
-
     phone_number_id = data.get("phone_number_id")
-    access_token = data.get("access_token")
     to_number = data.get("to")
     template_name = data.get("template_name")
     template_language = data.get("template_language", "en_US")
     template_components = data.get("template_components", [])
 
-    if not all([phone_number_id, access_token, to_number, template_name]):
-        frappe.throw(_("Missing required parameters"))
+    if not all([phone_number_id, to_number, template_name]):
+        frappe.throw(_("Missing required parameters: phone_number_id, to, template_name"))
 
-    # CRITICAL: Check quota and balance BEFORE calling Meta API
-    quota_check = enforce_quota(
-        customer_id=customer_info["customer_id"],
-        operation_type="message",
-    )
+    # 4. Calculate cost and check quota BEFORE calling Meta
+    cost_info = _calculate_total_cost(TEMPLATE_MESSAGE_COST, customer_id)
+    enforce_quota(customer_id, cost_info["total_cost"])
 
-    # Build Meta API request
+    # 5. Build and send Meta API request
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/messages"
-
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
     }
-
     payload = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
@@ -114,170 +133,139 @@ def send_template():
         "type": "template",
         "template": {
             "name": template_name,
-            "language": {
-                "code": template_language
-            }
+            "language": {"code": template_language}
         }
     }
-
     if template_components:
         payload["template"]["components"] = template_components
 
     try:
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
         response_data = response.json()
 
         if response.status_code != 200:
             error_msg = response_data.get("error", {}).get("message", ERR_META_API)
-            return {
-                "success": False,
-                "error": error_msg,
-            }
+            frappe.logger().error(f"[WhatsApp] Meta API error for {customer_id}: {error_msg}")
+            return {"success": False, "error": error_msg}
 
         message_id = response_data.get("messages", [{}])[0].get("id")
 
-        # Record usage metrics (NO content stored)
-        _record_message_metric(
-            customer_id=customer_info["customer_id"],
-            message_type="template",
+        # 6. SUCCESS - Deduct balance and record usage SYNCHRONOUSLY
+        new_balance = deduct_balance(
+            customer_id,
+            cost_info["total_cost"],
+            f"Template message: {template_name}"
         )
 
-        # Calculate and deduct cost
-        cost = _calculate_message_cost(template_name)
-        deduct_balance(customer_info["customer_id"], cost, "Template message sent")
+        _record_message_metric(customer_id, cost_info)
 
-        # Check and send balance alerts if needed
-        check_and_send_balance_alerts(customer_info["customer_id"])
-
-        # Get billing headers for response
-        billing_headers = get_billing_response_headers(customer_info["customer_id"])
+        frappe.db.commit()  # Ensure billing is committed
 
         return {
             "success": True,
             "message_id": message_id,
-            "cost": cost,
-            "balance": billing_headers.get("X-Walue-Balance"),
-            "quota_status": billing_headers.get("X-Walue-Quota-Status"),
+            "cost": cost_info,
+            "new_balance": new_balance,
         }
 
     except requests.RequestException as e:
         frappe.log_error(f"Meta API request failed: {str(e)}")
-        return {
-            "success": False,
-            "error": ERR_META_API,
-        }
+        return {"success": False, "error": ERR_META_API}
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
 def send_text():
     """
-    Send a free-form text message via Meta WhatsApp Business API
+    Proxy: Send free-form text message via Meta WhatsApp Business API
 
-    Only works within 24-hour conversation window.
+    Only works within 24-hour conversation window (free).
+
+    Headers Required:
+        X-Client-ID, X-Client-Secret, X-Meta-Token
 
     POST Body (JSON):
         phone_number_id: Customer's WhatsApp phone number ID
-        access_token: Customer's Meta access token
         to: Recipient phone number (E.164 format)
         text: Message text content
 
     Returns:
-        dict: Contains message_id and cost info
-
-    Note: Message content is NOT stored - only metrics
+        dict: Contains message_id and balance info
     """
-    customer_info = _authenticate_request()
+    # 1. Authenticate
+    customer_info = authenticate_request()
+    customer_id = customer_info["customer_id"]
 
-    # Enforce rate limit
-    enforce_rate_limit(customer_info["customer_id"], "send_text")
+    # 2. Enforce rate limit
+    enforce_rate_limit(customer_id, "send_text")
 
-    # Parse request body
+    # 3. Get Meta token
+    access_token = get_meta_token()
+
+    # 4. Parse request
     data = frappe.parse_json(frappe.request.data)
-
     phone_number_id = data.get("phone_number_id")
-    access_token = data.get("access_token")
     to_number = data.get("to")
     text = data.get("text")
 
-    if not all([phone_number_id, access_token, to_number, text]):
-        frappe.throw(_("Missing required parameters"))
+    if not all([phone_number_id, to_number, text]):
+        frappe.throw(_("Missing required parameters: phone_number_id, to, text"))
 
-    # CRITICAL: Check quota and balance BEFORE calling Meta API
-    # Text messages are free within conversation window, but still count toward quota
-    quota_check = enforce_quota(
-        customer_id=customer_info["customer_id"],
-        operation_type="message",
-        estimated_cost=0.0,  # Free within conversation window
-    )
+    # 4. Text messages within window are free, but still check quota
+    cost_info = _calculate_total_cost(TEXT_MESSAGE_COST, customer_id)
+    # Don't enforce quota for free messages, but still track
 
-    # Build Meta API request
+    # 5. Send to Meta
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/messages"
-
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
     }
-
     payload = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
         "to": to_number,
         "type": "text",
-        "text": {
-            "preview_url": False,
-            "body": text  # We send but do NOT store this
-        }
+        "text": {"preview_url": False, "body": text}
     }
 
     try:
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
         response_data = response.json()
 
         if response.status_code != 200:
             error_msg = response_data.get("error", {}).get("message", ERR_META_API)
-            return {
-                "success": False,
-                "error": error_msg,
-            }
+            return {"success": False, "error": error_msg}
 
         message_id = response_data.get("messages", [{}])[0].get("id")
 
-        # Record usage metrics (NO content stored)
-        _record_message_metric(
-            customer_id=customer_info["customer_id"],
-            message_type="text",
-        )
+        # Record usage (free, so no balance deduction)
+        _record_message_metric(customer_id, cost_info)
+        frappe.db.commit()
 
-        # Free-form messages are typically free within conversation window
-        cost = 0.0
-
-        # Get billing headers for response
-        billing_headers = get_billing_response_headers(customer_info["customer_id"])
+        balance = frappe.db.get_value("WhatsApp Customer", customer_id, "current_balance")
 
         return {
             "success": True,
             "message_id": message_id,
-            "cost": cost,
-            "balance": billing_headers.get("X-Walue-Balance"),
-            "quota_status": billing_headers.get("X-Walue-Quota-Status"),
+            "cost": cost_info,
+            "balance": balance,
         }
 
     except requests.RequestException as e:
         frappe.log_error(f"Meta API request failed: {str(e)}")
-        return {
-            "success": False,
-            "error": ERR_META_API,
-        }
+        return {"success": False, "error": ERR_META_API}
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
 def send_media():
     """
-    Send a media message (image, video, document) via Meta API
+    Proxy: Send media message (image, video, document) via Meta API
+
+    Headers Required:
+        X-Client-ID, X-Client-Secret, X-Meta-Token
 
     POST Body (JSON):
         phone_number_id: Customer's WhatsApp phone number ID
-        access_token: Customer's Meta access token
         to: Recipient phone number
         media_type: 'image', 'video', 'document', or 'audio'
         media_url: URL of the media file
@@ -285,39 +273,34 @@ def send_media():
         filename: Required for documents
 
     Returns:
-        dict: Contains message_id and cost info
+        dict: Contains message_id and balance info
     """
-    customer_info = _authenticate_request()
+    customer_info = authenticate_request()
+    customer_id = customer_info["customer_id"]
 
     # Enforce rate limit (media has lower limit)
-    enforce_rate_limit(customer_info["customer_id"], "send_media")
+    enforce_rate_limit(customer_id, "send_media")
+
+    access_token = get_meta_token()
 
     data = frappe.parse_json(frappe.request.data)
-
     phone_number_id = data.get("phone_number_id")
-    access_token = data.get("access_token")
     to_number = data.get("to")
     media_type = data.get("media_type")
     media_url = data.get("media_url")
     caption = data.get("caption")
     filename = data.get("filename")
 
-    if not all([phone_number_id, access_token, to_number, media_type, media_url]):
+    if not all([phone_number_id, to_number, media_type, media_url]):
         frappe.throw(_("Missing required parameters"))
 
     if media_type not in ["image", "video", "document", "audio"]:
         frappe.throw(_("Invalid media_type"))
 
-    # CRITICAL: Check quota and balance BEFORE calling Meta API
-    # Media messages are free within conversation window, but still count toward quota
-    quota_check = enforce_quota(
-        customer_id=customer_info["customer_id"],
-        operation_type="message",
-        estimated_cost=0.0,  # Free within conversation window
-    )
+    # Media within conversation window is free
+    cost_info = _calculate_total_cost(MEDIA_MESSAGE_COST, customer_id)
 
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/messages"
-
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
@@ -338,7 +321,7 @@ def send_media():
     }
 
     try:
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
         response_data = response.json()
 
         if response.status_code != 200:
@@ -347,20 +330,16 @@ def send_media():
 
         message_id = response_data.get("messages", [{}])[0].get("id")
 
-        _record_message_metric(
-            customer_id=customer_info["customer_id"],
-            message_type="media",
-        )
+        _record_message_metric(customer_id, cost_info)
+        frappe.db.commit()
 
-        # Get billing headers for response
-        billing_headers = get_billing_response_headers(customer_info["customer_id"])
+        balance = frappe.db.get_value("WhatsApp Customer", customer_id, "current_balance")
 
         return {
             "success": True,
             "message_id": message_id,
-            "cost": 0.0,  # Media within conversation window is free
-            "balance": billing_headers.get("X-Walue-Balance"),
-            "quota_status": billing_headers.get("X-Walue-Quota-Status"),
+            "cost": cost_info,
+            "balance": balance,
         }
 
     except requests.RequestException as e:
@@ -368,15 +347,19 @@ def send_media():
         return {"success": False, "error": ERR_META_API}
 
 
-def _record_message_metric(customer_id: str, message_type: str):
-    """
-    Record message usage metric
+# =============================================================================
+# INTERNAL FUNCTIONS
+# =============================================================================
 
-    IMPORTANT: We only record counts, NOT content
+
+def _record_message_metric(customer_id: str, cost_info: dict):
+    """
+    Record message usage metric SYNCHRONOUSLY
+
+    IMPORTANT: We only record counts and costs, NOT content
     """
     today = date.today()
 
-    # Get or create daily metrics record
     existing = frappe.db.get_value(
         "Daily Usage Metrics",
         {"customer": customer_id, "date": today},
@@ -384,14 +367,21 @@ def _record_message_metric(customer_id: str, message_type: str):
     )
 
     if existing:
-        # Increment message count
         frappe.db.sql("""
             UPDATE `tabDaily Usage Metrics`
-            SET total_messages = total_messages + 1
+            SET
+                total_messages = total_messages + 1,
+                total_message_cost = total_message_cost + %s,
+                total_markup = total_markup + %s,
+                total_revenue = total_revenue + %s
             WHERE name = %s
-        """, (existing,))
+        """, (
+            cost_info["base_cost"],
+            cost_info["markup"],
+            cost_info["total_cost"],
+            existing
+        ))
     else:
-        # Create new daily record
         frappe.get_doc({
             "doctype": "Daily Usage Metrics",
             "customer": customer_id,
@@ -400,25 +390,7 @@ def _record_message_metric(customer_id: str, message_type: str):
             "total_call_minutes": 0,
             "total_messages": 1,
             "total_call_cost": 0,
-            "total_message_cost": 0,
-            "total_markup": 0,
-            "total_revenue": 0,
+            "total_message_cost": cost_info["base_cost"],
+            "total_markup": cost_info["markup"],
+            "total_revenue": cost_info["total_cost"],
         }).insert(ignore_permissions=True)
-
-    frappe.db.commit()
-
-
-def _calculate_message_cost(template_name: str) -> float:
-    """
-    Calculate message cost based on template category
-
-    Actual implementation needs:
-    - Meta rate cards by country
-    - Template category (marketing, utility, etc.)
-    - Customer's subscription markup
-    """
-    # Simplified cost calculation
-    # TODO: Implement actual rate card lookup
-    base_cost = 0.005  # $0.005 USD per message (example)
-
-    return base_cost
