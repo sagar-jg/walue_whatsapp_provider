@@ -424,11 +424,15 @@ def _forward_to_customer(customer, webhook_data: dict):
         if response.status_code != 200:
             print(f"[FORWARD] ERROR: Customer returned {response.status_code}: {response.text[:200]}")
             frappe.log_error(
-                f"Failed to forward webhook to {customer.name}: {response.status_code} - {response.text[:200]}"
+                message=f"Status: {response.status_code}\nResponse: {response.text[:500]}",
+                title=f"Webhook forward failed: {customer.name}"
             )
 
     except requests.RequestException as e:
-        frappe.log_error(f"Webhook forwarding failed for {customer.name}: {str(e)}")
+        frappe.log_error(
+            message=str(e),
+            title=f"Webhook forward error: {customer.name}"
+        )
 
     # We intentionally don't store the webhook data
     # Customer app handles storage

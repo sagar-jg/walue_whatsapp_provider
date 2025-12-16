@@ -384,6 +384,7 @@ def pre_accept():
     }
 
     payload = {
+        "messaging_product": "whatsapp",
         "call_id": call_id,
         "action": "pre_accept",
         "session": {
@@ -447,6 +448,7 @@ def accept():
     }
 
     payload = {
+        "messaging_product": "whatsapp",
         "call_id": call_id,
         "action": "accept",
     }
@@ -509,6 +511,7 @@ def reject():
     }
 
     payload = {
+        "messaging_product": "whatsapp",
         "call_id": call_id,
         "action": "reject",
     }
@@ -563,6 +566,7 @@ def terminate():
     }
 
     payload = {
+        "messaging_product": "whatsapp",
         "call_id": call_id,
         "action": "terminate",
     }
@@ -602,20 +606,55 @@ def connect():
     Returns:
         dict: Contains call_id if successful
     """
-    customer_info = _authenticate_request()
+    print(f"[CONNECT] Starting connect request")
 
-    # Enforce rate limit for call connections
-    enforce_rate_limit(customer_info["customer_id"], "connect")
+    try:
+        customer_info = _authenticate_request()
+        print(f"[CONNECT] Authenticated customer: {customer_info.get('customer_id')}")
+    except Exception as auth_error:
+        print(f"[CONNECT] Authentication failed: {auth_error}")
+        return {"success": False, "error": f"Authentication failed: {str(auth_error)}"}
 
-    data = frappe.parse_json(frappe.request.data)
+    try:
+        # Enforce rate limit for call connections
+        enforce_rate_limit(customer_info["customer_id"], "connect")
+        print(f"[CONNECT] Rate limit check passed")
+    except Exception as rate_error:
+        print(f"[CONNECT] Rate limit error: {rate_error}")
+        return {"success": False, "error": f"Rate limit exceeded: {str(rate_error)}"}
+
+    try:
+        raw_data = frappe.request.data
+        if isinstance(raw_data, bytes):
+            raw_data = raw_data.decode('utf-8')
+        data = frappe.parse_json(raw_data) if raw_data else {}
+        print(f"[CONNECT] Parsed data keys: {list(data.keys()) if isinstance(data, dict) else 'invalid'}")
+    except Exception as parse_error:
+        print(f"[CONNECT] JSON parse error: {parse_error}")
+        return {"success": False, "error": f"Invalid JSON payload: {str(parse_error)}"}
 
     phone_number_id = data.get("phone_number_id")
     access_token = data.get("access_token")
     to_number = data.get("to")
     sdp = data.get("sdp")
 
-    if not all([phone_number_id, access_token, to_number, sdp]):
-        frappe.throw(_("Missing required parameters"))
+    print(f"[CONNECT] phone_number_id: {bool(phone_number_id)}, access_token: {bool(access_token)}, to: {to_number}, sdp: {bool(sdp)}")
+
+    # Check for missing parameters and provide specific error
+    missing = []
+    if not phone_number_id:
+        missing.append("phone_number_id")
+    if not access_token:
+        missing.append("access_token")
+    if not to_number:
+        missing.append("to")
+    if not sdp:
+        missing.append("sdp")
+
+    if missing:
+        error_msg = f"Missing required parameters: {', '.join(missing)}"
+        print(f"[CONNECT] {error_msg}")
+        return {"success": False, "error": error_msg}
 
     # Check if calling is available for this region
     country_code = _extract_country_code(to_number)
@@ -634,6 +673,7 @@ def connect():
     }
 
     payload = {
+        "messaging_product": "whatsapp",
         "to": to_number,
         "action": "connect",
         "session": {
