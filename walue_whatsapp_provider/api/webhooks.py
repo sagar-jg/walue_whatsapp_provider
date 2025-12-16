@@ -350,6 +350,10 @@ def _route_call_webhook(customer, value: dict, entry: dict):
 
         elif event == "terminate":
             # Call terminated
+            # Debug: Log what Meta actually sends
+            print(f"[CALL WEBHOOK] Terminate event raw data: {call}")
+            print(f"[CALL WEBHOOK] duration={call.get('duration')}, start_time={call.get('start_time')}, end_time={call.get('end_time')}")
+
             _forward_to_customer(customer, {
                 "type": WEBHOOK_CALL_TERMINATE,
                 "call_id": call_id,
