@@ -15,6 +15,7 @@ CRITICAL: We do NOT store call details - only aggregated metrics
 import frappe
 from frappe import _
 import requests
+import json
 from datetime import datetime, date
 import secrets
 
@@ -138,12 +139,24 @@ def request_permission():
             }
         }
 
+    print(f"[REQUEST_PERMISSION] Calling Meta API: {url}")
+    print(f"[REQUEST_PERMISSION] Payload type: {'template' if use_template else 'interactive'}, to: {to_number}")
+
     try:
         response = requests.post(url, json=payload, headers=headers)
+        print(f"[REQUEST_PERMISSION] Meta response status: {response.status_code}")
+        print(f"[REQUEST_PERMISSION] Meta response body: {response.text[:500]}")
+
         response_data = response.json()
 
         if response.status_code != 200:
             error_msg = response_data.get("error", {}).get("message", ERR_META_API)
+            return {"success": False, "error": error_msg}
+
+        # Check for error in response body even when status is 200
+        if "error" in response_data:
+            error_msg = response_data.get("error", {}).get("message", "Unknown Meta API error")
+            print(f"[REQUEST_PERMISSION] Meta returned error in body: {error_msg}")
             return {"success": False, "error": error_msg}
 
         message_id = response_data.get("messages", [{}])[0].get("id")
@@ -152,6 +165,7 @@ def request_permission():
             "success": True,
             "message_id": message_id,
             "message": "Permission request sent successfully",
+            "meta_response": response_data,
         }
 
     except requests.RequestException as e:
@@ -423,18 +437,33 @@ def pre_accept():
         }
     }
 
+    print(f"[PRE_ACCEPT] Calling Meta API: {url}")
+    print(f"[PRE_ACCEPT] Payload: {json.dumps(payload, indent=2)}")
+
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=10)
+        print(f"[PRE_ACCEPT] Meta response status: {response.status_code}")
+        print(f"[PRE_ACCEPT] Meta response body: {response.text[:500]}")
+
         response_data = response.json()
 
+        # Check for HTTP error status
         if response.status_code != 200:
             error_msg = response_data.get("error", {}).get("message", ERR_META_API)
+            frappe.log_error(f"Meta pre_accept failed: {error_msg}")
+            return {"success": False, "error": error_msg}
+
+        # Check for error in response body even when status is 200
+        if "error" in response_data:
+            error_msg = response_data.get("error", {}).get("message", "Unknown Meta API error")
+            print(f"[PRE_ACCEPT] Meta returned error in body: {error_msg}")
             frappe.log_error(f"Meta pre_accept failed: {error_msg}")
             return {"success": False, "error": error_msg}
 
         return {
             "success": True,
             "message": "Pre-accept sent successfully",
+            "meta_response": response_data,
         }
 
     except requests.RequestException as e:
@@ -506,18 +535,33 @@ def accept():
             "sdp": sdp
         }
 
+    print(f"[ACCEPT] Calling Meta API: {url}")
+    print(f"[ACCEPT] Payload: {json.dumps(payload, indent=2)}")
+
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=10)
+        print(f"[ACCEPT] Meta response status: {response.status_code}")
+        print(f"[ACCEPT] Meta response body: {response.text[:500]}")
+
         response_data = response.json()
 
+        # Check for HTTP error status
         if response.status_code != 200:
             error_msg = response_data.get("error", {}).get("message", ERR_META_API)
+            frappe.log_error(f"Meta accept failed: {error_msg}")
+            return {"success": False, "error": error_msg}
+
+        # Check for error in response body even when status is 200
+        if "error" in response_data:
+            error_msg = response_data.get("error", {}).get("message", "Unknown Meta API error")
+            print(f"[ACCEPT] Meta returned error in body: {error_msg}")
             frappe.log_error(f"Meta accept failed: {error_msg}")
             return {"success": False, "error": error_msg}
 
         return {
             "success": True,
             "message": "Call accepted successfully",
+            "meta_response": response_data,
         }
 
     except requests.RequestException as e:
@@ -578,17 +622,30 @@ def reject():
         "action": "reject",
     }
 
+    print(f"[REJECT] Calling Meta API: {url}")
+    print(f"[REJECT] Payload: {json.dumps(payload, indent=2)}")
+
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=10)
+        print(f"[REJECT] Meta response status: {response.status_code}")
+        print(f"[REJECT] Meta response body: {response.text[:500]}")
+
         response_data = response.json()
 
         if response.status_code != 200:
             error_msg = response_data.get("error", {}).get("message", ERR_META_API)
             return {"success": False, "error": error_msg}
 
+        # Check for error in response body even when status is 200
+        if "error" in response_data:
+            error_msg = response_data.get("error", {}).get("message", "Unknown Meta API error")
+            print(f"[REJECT] Meta returned error in body: {error_msg}")
+            return {"success": False, "error": error_msg}
+
         return {
             "success": True,
             "message": "Call rejected",
+            "meta_response": response_data,
         }
 
     except requests.RequestException as e:
@@ -649,17 +706,30 @@ def terminate():
         "action": "terminate",
     }
 
+    print(f"[TERMINATE] Calling Meta API: {url}")
+    print(f"[TERMINATE] Payload: {json.dumps(payload, indent=2)}")
+
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=10)
+        print(f"[TERMINATE] Meta response status: {response.status_code}")
+        print(f"[TERMINATE] Meta response body: {response.text[:500]}")
+
         response_data = response.json()
 
         if response.status_code != 200:
             error_msg = response_data.get("error", {}).get("message", ERR_META_API)
             return {"success": False, "error": error_msg}
 
+        # Check for error in response body even when status is 200
+        if "error" in response_data:
+            error_msg = response_data.get("error", {}).get("message", "Unknown Meta API error")
+            print(f"[TERMINATE] Meta returned error in body: {error_msg}")
+            return {"success": False, "error": error_msg}
+
         return {
             "success": True,
             "message": "Call terminated",
+            "meta_response": response_data,
         }
 
     except requests.RequestException as e:
@@ -760,12 +830,25 @@ def connect():
         }
     }
 
+    print(f"[CONNECT] Calling Meta API: {url}")
+    print(f"[CONNECT] Payload (without sdp): messaging_product=whatsapp, to={to_number}, action=connect")
+
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=10)
+        print(f"[CONNECT] Meta response status: {response.status_code}")
+        print(f"[CONNECT] Meta response body: {response.text[:500]}")
+
         response_data = response.json()
 
         if response.status_code != 200:
             error_msg = response_data.get("error", {}).get("message", ERR_META_API)
+            frappe.log_error(f"Meta connect call failed: {error_msg}")
+            return {"success": False, "error": error_msg}
+
+        # Check for error in response body even when status is 200
+        if "error" in response_data:
+            error_msg = response_data.get("error", {}).get("message", "Unknown Meta API error")
+            print(f"[CONNECT] Meta returned error in body: {error_msg}")
             frappe.log_error(f"Meta connect call failed: {error_msg}")
             return {"success": False, "error": error_msg}
 
@@ -775,6 +858,7 @@ def connect():
             "success": True,
             "call_id": call_id,
             "message": "Call initiated, waiting for user to accept",
+            "meta_response": response_data,
         }
 
     except requests.RequestException as e:
