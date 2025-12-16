@@ -364,17 +364,47 @@ def pre_accept():
     Returns:
         dict: Success status
     """
-    customer_info = _authenticate_request()
+    print(f"[PRE_ACCEPT] Starting pre_accept request")
 
-    data = frappe.parse_json(frappe.request.data)
+    try:
+        customer_info = _authenticate_request()
+        print(f"[PRE_ACCEPT] Authenticated customer: {customer_info.get('customer_id')}")
+    except Exception as auth_error:
+        print(f"[PRE_ACCEPT] Authentication failed: {auth_error}")
+        return {"success": False, "error": f"Authentication failed: {str(auth_error)}"}
+
+    try:
+        raw_data = frappe.request.data
+        if isinstance(raw_data, bytes):
+            raw_data = raw_data.decode('utf-8')
+        data = frappe.parse_json(raw_data) if raw_data else {}
+        print(f"[PRE_ACCEPT] Parsed data keys: {list(data.keys()) if isinstance(data, dict) else 'invalid'}")
+    except Exception as parse_error:
+        print(f"[PRE_ACCEPT] JSON parse error: {parse_error}")
+        return {"success": False, "error": f"Invalid JSON payload: {str(parse_error)}"}
 
     phone_number_id = data.get("phone_number_id")
     access_token = data.get("access_token")
     call_id = data.get("call_id")
     sdp = data.get("sdp")
 
-    if not all([phone_number_id, access_token, call_id, sdp]):
-        frappe.throw(_("Missing required parameters"))
+    print(f"[PRE_ACCEPT] phone_number_id: {bool(phone_number_id)}, access_token: {bool(access_token)}, call_id: {call_id}, sdp: {bool(sdp)}")
+
+    # Check for missing parameters
+    missing = []
+    if not phone_number_id:
+        missing.append("phone_number_id")
+    if not access_token:
+        missing.append("access_token")
+    if not call_id:
+        missing.append("call_id")
+    if not sdp:
+        missing.append("sdp")
+
+    if missing:
+        error_msg = f"Missing required parameters: {', '.join(missing)}"
+        print(f"[PRE_ACCEPT] {error_msg}")
+        return {"success": False, "error": error_msg}
 
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
 
@@ -428,17 +458,33 @@ def accept():
     Returns:
         dict: Success status
     """
-    customer_info = _authenticate_request()
+    print(f"[ACCEPT] Starting accept request")
 
-    data = frappe.parse_json(frappe.request.data)
+    try:
+        customer_info = _authenticate_request()
+        print(f"[ACCEPT] Authenticated customer: {customer_info.get('customer_id')}")
+    except Exception as auth_error:
+        print(f"[ACCEPT] Authentication failed: {auth_error}")
+        return {"success": False, "error": f"Authentication failed: {str(auth_error)}"}
+
+    try:
+        raw_data = frappe.request.data
+        if isinstance(raw_data, bytes):
+            raw_data = raw_data.decode('utf-8')
+        data = frappe.parse_json(raw_data) if raw_data else {}
+    except Exception as parse_error:
+        print(f"[ACCEPT] JSON parse error: {parse_error}")
+        return {"success": False, "error": f"Invalid JSON payload: {str(parse_error)}"}
 
     phone_number_id = data.get("phone_number_id")
     access_token = data.get("access_token")
     call_id = data.get("call_id")
     sdp = data.get("sdp")
 
+    print(f"[ACCEPT] phone_number_id: {bool(phone_number_id)}, access_token: {bool(access_token)}, call_id: {call_id}")
+
     if not all([phone_number_id, access_token, call_id]):
-        frappe.throw(_("Missing required parameters"))
+        return {"success": False, "error": "Missing required parameters: phone_number_id, access_token, or call_id"}
 
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
 
@@ -492,16 +538,32 @@ def reject():
     Returns:
         dict: Success status
     """
-    customer_info = _authenticate_request()
+    print(f"[REJECT] Starting reject request")
 
-    data = frappe.parse_json(frappe.request.data)
+    try:
+        customer_info = _authenticate_request()
+        print(f"[REJECT] Authenticated customer: {customer_info.get('customer_id')}")
+    except Exception as auth_error:
+        print(f"[REJECT] Authentication failed: {auth_error}")
+        return {"success": False, "error": f"Authentication failed: {str(auth_error)}"}
+
+    try:
+        raw_data = frappe.request.data
+        if isinstance(raw_data, bytes):
+            raw_data = raw_data.decode('utf-8')
+        data = frappe.parse_json(raw_data) if raw_data else {}
+    except Exception as parse_error:
+        print(f"[REJECT] JSON parse error: {parse_error}")
+        return {"success": False, "error": f"Invalid JSON payload: {str(parse_error)}"}
 
     phone_number_id = data.get("phone_number_id")
     access_token = data.get("access_token")
     call_id = data.get("call_id")
 
+    print(f"[REJECT] phone_number_id: {bool(phone_number_id)}, access_token: {bool(access_token)}, call_id: {call_id}")
+
     if not all([phone_number_id, access_token, call_id]):
-        frappe.throw(_("Missing required parameters"))
+        return {"success": False, "error": "Missing required parameters: phone_number_id, access_token, or call_id"}
 
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
 
@@ -547,16 +609,32 @@ def terminate():
     Returns:
         dict: Success status
     """
-    customer_info = _authenticate_request()
+    print(f"[TERMINATE] Starting terminate request")
 
-    data = frappe.parse_json(frappe.request.data)
+    try:
+        customer_info = _authenticate_request()
+        print(f"[TERMINATE] Authenticated customer: {customer_info.get('customer_id')}")
+    except Exception as auth_error:
+        print(f"[TERMINATE] Authentication failed: {auth_error}")
+        return {"success": False, "error": f"Authentication failed: {str(auth_error)}"}
+
+    try:
+        raw_data = frappe.request.data
+        if isinstance(raw_data, bytes):
+            raw_data = raw_data.decode('utf-8')
+        data = frappe.parse_json(raw_data) if raw_data else {}
+    except Exception as parse_error:
+        print(f"[TERMINATE] JSON parse error: {parse_error}")
+        return {"success": False, "error": f"Invalid JSON payload: {str(parse_error)}"}
 
     phone_number_id = data.get("phone_number_id")
     access_token = data.get("access_token")
     call_id = data.get("call_id")
 
+    print(f"[TERMINATE] phone_number_id: {bool(phone_number_id)}, access_token: {bool(access_token)}, call_id: {call_id}")
+
     if not all([phone_number_id, access_token, call_id]):
-        frappe.throw(_("Missing required parameters"))
+        return {"success": False, "error": "Missing required parameters: phone_number_id, access_token, or call_id"}
 
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/calls"
 
