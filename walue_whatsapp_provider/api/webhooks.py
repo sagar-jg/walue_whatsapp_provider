@@ -305,18 +305,25 @@ def _route_call_webhook(customer, value: dict, entry: dict):
 
     Args:
         customer: Customer document
-        value: Change value from webhook
+        value: Change value from webhook (contains 'calls' array)
         entry: Full entry containing call data
     """
-    # WhatsApp Business Calling API webhooks have a different structure
-    # They come under the "calls" field with events like:
-    # - connect (with SDP offer)
-    # - terminate (call ended)
+    # WhatsApp Business Calling API webhooks structure:
+    # entry.changes[].value.calls[] contains the call events
+    # Each call has: id, from, to, event, direction, session (with sdp)
 
-    calls = entry.get("calls", [])
+    # First try value.calls (correct structure per Meta docs)
+    calls = value.get("calls", [])
+
     if not calls:
-        # Try value structure
-        calls = [value] if value else []
+        # Fallback: try entry.calls
+        calls = entry.get("calls", [])
+
+    if not calls:
+        print(f"[CALL WEBHOOK] No calls found in value or entry. value keys: {list(value.keys())}")
+        return
+
+    print(f"[CALL WEBHOOK] Found {len(calls)} call(s) to process")
 
     for call in calls:
         call_id = call.get("id")
