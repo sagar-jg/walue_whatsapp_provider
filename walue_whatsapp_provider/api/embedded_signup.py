@@ -29,7 +29,7 @@ from walue_whatsapp_provider.constants import (
 )
 
 
-@frappe.whitelist(allow_guest=False)
+@frappe.whitelist(allow_guest=True)
 def initiate(customer_id: str) -> dict:
     """
     Initiate embedded signup flow for a customer
