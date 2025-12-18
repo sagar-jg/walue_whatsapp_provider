@@ -35,12 +35,11 @@ def register():
     Returns:
         dict: Customer ID and OAuth credentials
     """
-    data = frappe.parse_json(frappe.request.data)
-
-    customer_name = data.get("customer_name")
-    company_email = data.get("company_email")
-    frappe_site_url = data.get("frappe_site_url")
-    subscription_plan = data.get("subscription_plan")
+    # Get data from form_dict (Frappe auto-parses JSON body)
+    customer_name = frappe.form_dict.get("customer_name")
+    company_email = frappe.form_dict.get("company_email")
+    frappe_site_url = frappe.form_dict.get("frappe_site_url")
+    subscription_plan = frappe.form_dict.get("subscription_plan")
 
     if not all([customer_name, company_email, frappe_site_url]):
         frappe.throw(_("Missing required fields"))
