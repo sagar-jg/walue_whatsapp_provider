@@ -71,7 +71,7 @@
         },
         {
             "fieldname": "signup_url",
-            "fieldtype": "Data",
+            "fieldtype": "Small Text",
             "label": "Signup URL",
             "read_only": 1,
             "description": "Generated embedded signup URL"
