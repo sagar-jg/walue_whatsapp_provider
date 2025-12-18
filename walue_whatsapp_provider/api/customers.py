@@ -49,30 +49,31 @@ def register():
     if frappe.db.exists("WhatsApp Customer", {"company_email": company_email}):
         frappe.throw(_("Customer with this email already exists"))
 
-    # Generate OAuth credentials
-    oauth_client_id = secrets.token_urlsafe(24)
-    oauth_client_secret = secrets.token_urlsafe(32)
-
     # Create customer record
+    # Note: oauth_client_id, oauth_client_secret, and setup_token are auto-generated in before_insert
     customer = frappe.get_doc({
         "doctype": "WhatsApp Customer",
         "customer_name": customer_name,
         "company_email": company_email,
         "frappe_site_url": frappe_site_url,
         "status": "Pending",
-        "oauth_client_id": oauth_client_id,
-        "oauth_client_secret": oauth_client_secret,
         "subscription_plan": subscription_plan,
         "billing_cycle": "Monthly",
         "current_balance": 0,
     })
     customer.insert(ignore_permissions=True)
 
+    # Get provider URL for embedded signup
+    provider_url = frappe.utils.get_url()
+
     return {
         "success": True,
         "customer_id": customer.name,
-        "oauth_client_id": oauth_client_id,
-        "oauth_client_secret": oauth_client_secret,
+        "oauth_client_id": customer.oauth_client_id,
+        "oauth_client_secret": customer.oauth_client_secret,
+        "setup_token": customer.setup_token,
+        "setup_token_expiry": str(customer.setup_token_expiry),
+        "provider_url": provider_url,
         "message": "Customer registered. Complete embedded signup to activate.",
     }
 

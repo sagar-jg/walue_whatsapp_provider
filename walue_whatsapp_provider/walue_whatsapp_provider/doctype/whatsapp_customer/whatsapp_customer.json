@@ -14,12 +14,20 @@
         "frappe_site_url",
         "created_date",
         "last_sync",
+        "setup_section",
+        "setup_token",
+        "setup_token_expiry",
+        "column_break_setup",
+        "setup_token_used",
+        "setup_completed_at",
         "waba_section",
         "embedded_signup_completed",
         "meta_business_id",
         "column_break_waba",
         "waba_id",
         "phone_number_id",
+        "phone_number",
+        "waba_credentials_temp",
         "business_verification_section",
         "business_verification_status",
         "verification_date",
@@ -98,6 +106,45 @@
             "description": "Last time customer app synced with provider"
         },
         {
+            "fieldname": "setup_section",
+            "fieldtype": "Section Break",
+            "label": "Setup Token",
+            "collapsible": 1
+        },
+        {
+            "fieldname": "setup_token",
+            "fieldtype": "Data",
+            "label": "Setup Token",
+            "unique": 1,
+            "read_only": 1,
+            "description": "One-time token for client app auto-configuration"
+        },
+        {
+            "fieldname": "setup_token_expiry",
+            "fieldtype": "Datetime",
+            "label": "Token Expiry",
+            "read_only": 1,
+            "description": "Setup token expires after this time"
+        },
+        {
+            "fieldname": "column_break_setup",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "setup_token_used",
+            "fieldtype": "Check",
+            "label": "Token Used",
+            "read_only": 1,
+            "description": "Token can only be used once"
+        },
+        {
+            "fieldname": "setup_completed_at",
+            "fieldtype": "Datetime",
+            "label": "Setup Completed At",
+            "read_only": 1,
+            "description": "When client app completed auto-configuration"
+        },
+        {
             "fieldname": "waba_section",
             "fieldtype": "Section Break",
             "label": "WhatsApp Business Account",
@@ -133,6 +180,20 @@
             "label": "Phone Number ID",
             "read_only": 1,
             "description": "Registered phone number ID (reference only)"
+        },
+        {
+            "fieldname": "phone_number",
+            "fieldtype": "Data",
+            "label": "Phone Number",
+            "read_only": 1,
+            "description": "Display phone number (reference only)"
+        },
+        {
+            "fieldname": "waba_credentials_temp",
+            "fieldtype": "Password",
+            "label": "WABA Credentials (Temp)",
+            "hidden": 1,
+            "description": "Temporary storage for WABA credentials - cleared after setup token exchange"
         },
         {
             "fieldname": "business_verification_section",

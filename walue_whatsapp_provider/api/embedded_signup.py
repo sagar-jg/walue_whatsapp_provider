@@ -124,30 +124,45 @@ def callback():
         if waba_details.get("waba_id"):
             _subscribe_app_to_waba(waba_details["waba_id"], token_data["access_token"])
 
-        # Update customer record with WABA reference (ID only, not credentials)
+        # Update customer record with WABA reference
         customer = frappe.get_doc("WhatsApp Customer", session.customer)
         customer.meta_business_id = waba_details.get("business_id")
         customer.waba_id = waba_details.get("waba_id")
         customer.phone_number_id = waba_details.get("phone_number_id")
+        customer.phone_number = waba_details.get("phone_number")
         customer.embedded_signup_completed = 1
+        customer.status = "Active"  # Activate customer after successful signup
         customer.save(ignore_permissions=True)
+
+        # Store WABA credentials temporarily for setup token exchange
+        # These will be cleared after the client app retrieves them
+        waba_credentials = {
+            "waba_id": waba_details.get("waba_id"),
+            "phone_number_id": waba_details.get("phone_number_id"),
+            "phone_number": waba_details.get("phone_number"),
+            "business_id": waba_details.get("business_id"),
+            "access_token": token_data["access_token"],
+        }
+        customer.store_waba_credentials_temp(waba_credentials)
 
         # Update session as completed
         session.status = SIGNUP_STATUS_COMPLETED
         session.completed_at = datetime.now()
         session.save(ignore_permissions=True)
 
-        # Return WABA credentials to customer app (they store it, not us)
+        # Redirect to success page
+        # If website is hosted separately, change this URL to point to your website
+        # Default: use the /whatsapp-success page on the provider site
+        base_url = frappe.utils.get_url()
+        success_url = f"{base_url}/whatsapp-success?customer_id={customer.name}&session_id={session.session_id}"
+
+        frappe.local.response["type"] = "redirect"
+        frappe.local.response["location"] = success_url
+
         return {
             "success": True,
             "message": MSG_SIGNUP_COMPLETED,
-            "waba_credentials": {
-                "waba_id": waba_details.get("waba_id"),
-                "phone_number_id": waba_details.get("phone_number_id"),
-                "phone_number": waba_details.get("phone_number"),
-                "business_id": waba_details.get("business_id"),
-                "access_token": token_data["access_token"],  # Customer stores this
-            }
+            "redirect_url": success_url,
         }
 
     except Exception as e:
