@@ -21,7 +21,7 @@ from walue_whatsapp_provider.constants import (
 from walue_whatsapp_provider.utils.auth import authenticate_request as _authenticate_request
 
 
-@frappe.whitelist(allow_guest=False, methods=["POST"])
+@frappe.whitelist(allow_guest=True, methods=["POST"])
 def register():
     """
     Register a new customer
