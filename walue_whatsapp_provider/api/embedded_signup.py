@@ -167,9 +167,12 @@ def callback():
 
     except Exception as e:
         session.status = SIGNUP_STATUS_FAILED
-        session.error_message = str(e)
+        session.error_message = str(e)[:500]  # Truncate for DB field
         session.save(ignore_permissions=True)
-        frappe.log_error(f"Embedded signup callback failed: {str(e)}")
+        frappe.log_error(
+            title="Embedded signup callback failed",
+            message=str(e)
+        )
         return {"success": False, "error": ERR_OAUTH_FAILED}
 
 
