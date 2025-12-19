@@ -265,40 +265,41 @@ def _exchange_code_for_token(settings, code: str) -> dict:
 
 def _get_waba_details(access_token: str) -> dict:
     """Get WABA details using the access token"""
-    # Get shared WABAs
-    url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/debug_token"
-    params = {
-        "input_token": access_token,
-        "access_token": access_token,
-    }
-
-    response = requests.get(url, params=params)
-    response.raise_for_status()
-    data = response.json()
-
-    # Extract WABA info from granular scopes
-    # This is a simplified version - actual implementation needs more parsing
     waba_id = None
     phone_number_id = None
     phone_number = None
-    business_id = data.get("data", {}).get("app_id")
+    business_id = None
 
     # Get WABA from shared accounts
     waba_url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/me/whatsapp_business_accounts"
     waba_response = requests.get(waba_url, params={"access_token": access_token})
-    if waba_response.ok:
-        waba_data = waba_response.json()
-        if waba_data.get("data"):
-            waba_id = waba_data["data"][0].get("id")
 
-            # Get phone numbers for this WABA
-            phone_url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{waba_id}/phone_numbers"
-            phone_response = requests.get(phone_url, params={"access_token": access_token})
-            if phone_response.ok:
-                phone_data = phone_response.json()
-                if phone_data.get("data"):
-                    phone_number_id = phone_data["data"][0].get("id")
-                    phone_number = phone_data["data"][0].get("display_phone_number")
+    if not waba_response.ok:
+        frappe.log_error(
+            title="Failed to get WABA list",
+            message=f"Status: {waba_response.status_code}, Response: {waba_response.text[:500]}"
+        )
+        return {"waba_id": None, "phone_number_id": None, "phone_number": None, "business_id": None}
+
+    waba_data = waba_response.json()
+
+    if waba_data.get("data"):
+        waba_info = waba_data["data"][0]
+        waba_id = waba_info.get("id")
+
+        # Get phone numbers for this WABA
+        phone_url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{waba_id}/phone_numbers"
+        phone_response = requests.get(phone_url, params={"access_token": access_token})
+
+        if phone_response.ok:
+            phone_data = phone_response.json()
+            if phone_data.get("data"):
+                phone_info = phone_data["data"][0]
+                phone_number_id = phone_info.get("id")
+                phone_number = phone_info.get("display_phone_number")
+
+        # Get business ID from WABA info if available
+        business_id = waba_info.get("business_id") or waba_info.get("owner_business_info", {}).get("id")
 
     return {
         "waba_id": waba_id,
