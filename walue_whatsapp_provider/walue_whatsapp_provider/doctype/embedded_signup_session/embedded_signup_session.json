@@ -78,7 +78,7 @@
         },
         {
             "fieldname": "code",
-            "fieldtype": "Data",
+            "fieldtype": "Small Text",
             "label": "OAuth Code",
             "read_only": 1,
             "description": "Authorization code received from Meta"
