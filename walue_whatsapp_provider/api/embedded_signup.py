@@ -253,38 +253,48 @@ def complete() -> dict:
         session_id: Session ID from initiate()
         waba_id: WhatsApp Business Account ID from Meta
         phone_number_id: Phone number ID from Meta
-        code: OAuth authorization code
+        code: OAuth authorization code (optional)
+        access_token: Access token from FB.login (optional, alternative to code)
     """
     customer_id = frappe.form_dict.get("customer_id")
     session_id = frappe.form_dict.get("session_id")
     waba_id = frappe.form_dict.get("waba_id")
     phone_number_id = frappe.form_dict.get("phone_number_id")
     code = frappe.form_dict.get("code")
+    access_token_param = frappe.form_dict.get("access_token")
 
-    _log_debug("Complete called", f"customer: {customer_id}, session: {session_id}, waba: {waba_id}, phone_id: {phone_number_id}")
+    _log_debug("Complete called", f"customer: {customer_id}, session: {session_id}, waba: {waba_id}, phone_id: {phone_number_id}, has_code: {bool(code)}, has_token: {bool(access_token_param)}")
 
+    # Validate required parameters
     if not customer_id or not waba_id:
-        return {"success": False, "error": "Missing required parameters"}
+        return {"success": False, "error": "Missing required parameters (customer_id and waba_id are required)"}
 
     # Validate customer exists
     if not frappe.db.exists("WhatsApp Customer", customer_id):
         return {"success": False, "error": "Customer not found"}
 
+    session = None
     try:
-        # Get or create session
-        session = None
+        # Validate session if provided
         if session_id:
             session = _get_valid_session(session_id)
+            if session:
+                # Security check: Verify session belongs to this customer
+                if session.customer != customer_id:
+                    _log_debug("Session customer mismatch", f"session.customer: {session.customer}, customer_id: {customer_id}")
+                    return {"success": False, "error": "Session does not belong to this customer"}
 
-        if session:
-            session.status = SIGNUP_STATUS_IN_PROGRESS
-            if code:
-                session.code = code
-            session.save(ignore_permissions=True)
+                session.status = SIGNUP_STATUS_IN_PROGRESS
+                if code:
+                    session.code = code
+                session.save(ignore_permissions=True)
+            else:
+                _log_debug("Session not found", f"session_id: {session_id}")
+                # Continue without session - customer might have refreshed the page
 
-        # Exchange code for access token if provided
-        access_token = None
-        if code:
+        # Get access token - either from param, code exchange, or none
+        access_token = access_token_param
+        if not access_token and code:
             try:
                 settings = frappe.get_single("WhatsApp Provider Settings")
                 token_data = _exchange_code_for_token(settings, code)
@@ -307,14 +317,16 @@ def complete() -> dict:
                     phone_data = phone_response.json()
                     phone_number = phone_data.get("display_phone_number")
                     _log_debug("Phone number fetched", f"phone: {phone_number}")
+                else:
+                    _log_debug("Phone fetch failed", f"status: {phone_response.status_code}, response: {phone_response.text[:200]}")
             except Exception as e:
-                _log_debug("Phone fetch failed", str(e))
+                _log_debug("Phone fetch exception", str(e))
 
         # Subscribe app to WABA for webhooks
         if access_token and waba_id:
             _subscribe_app_to_waba(waba_id, access_token)
 
-        # Update customer record
+        # Update customer record (single save)
         customer = frappe.get_doc("WhatsApp Customer", customer_id)
         customer.waba_id = waba_id
         customer.phone_number_id = phone_number_id
@@ -325,30 +337,33 @@ def complete() -> dict:
         # Generate setup token for client app configuration
         customer._generate_setup_token()
 
-        customer.save(ignore_permissions=True)
-        _log_debug("Customer updated", f"customer: {customer.name}, waba: {waba_id}, phone: {phone_number}")
-
-        # Store temp credentials if we have access token
+        # Store temp credentials in memory before save (avoid double save)
         if access_token:
+            import json
             waba_credentials = {
                 "waba_id": waba_id,
                 "phone_number_id": phone_number_id,
                 "phone_number": phone_number,
                 "access_token": access_token,
             }
-            customer.store_waba_credentials_temp(waba_credentials)
+            customer.waba_credentials_temp = json.dumps(waba_credentials)
+
+        customer.save(ignore_permissions=True)
+        _log_debug("Customer updated", f"customer: {customer.name}, waba: {waba_id}, phone: {phone_number}, has_credentials: {bool(access_token)}")
 
         # Update session as completed
         if session:
             session.status = SIGNUP_STATUS_COMPLETED
             session.completed_at = datetime.now()
             session.save(ignore_permissions=True)
+            _log_debug("Session completed", f"session: {session.name}")
 
         return {
             "success": True,
             "message": MSG_SIGNUP_COMPLETED,
             "phone_number": phone_number,
             "setup_token": customer.setup_token,
+            "setup_token_expiry": str(customer.setup_token_expiry) if customer.setup_token_expiry else None,
         }
 
     except Exception as e:
@@ -356,9 +371,12 @@ def complete() -> dict:
         _log_debug("Complete exception", f"error: {str(e)}\n\n{traceback.format_exc()}")
 
         if session:
-            session.status = SIGNUP_STATUS_FAILED
-            session.error_message = str(e)[:500]
-            session.save(ignore_permissions=True)
+            try:
+                session.status = SIGNUP_STATUS_FAILED
+                session.error_message = str(e)[:500]
+                session.save(ignore_permissions=True)
+            except Exception:
+                pass  # Don't fail if session save fails
 
         return {"success": False, "error": str(e)}
 
