@@ -240,9 +240,11 @@ def _build_embedded_signup_url(settings, session_id: str, customer_id: str) -> s
 
 def _exchange_code_for_token(settings, code: str) -> dict:
     """Exchange OAuth code for access token"""
-    callback_url = frappe.utils.get_url(
-        "/api/method/walue_whatsapp_provider.api.embedded_signup.callback"
-    )
+    # Get base URL without port for ngrok
+    site_url = frappe.utils.get_url()
+    if ':8000' in site_url or ':443' in site_url:
+        site_url = site_url.replace(':8000', '').replace(':443', '')
+    callback_url = f"{site_url}/api/method/walue_whatsapp_provider.api.embedded_signup.callback"
 
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/oauth/access_token"
     params = {
