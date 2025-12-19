@@ -204,10 +204,21 @@ def status(session_id: str) -> dict:
 
 def _build_embedded_signup_url(settings, session_id: str, customer_id: str) -> str:
     """Build the Meta embedded signup URL"""
-    # Get callback URL
-    callback_url = frappe.utils.get_url(
-        "/api/method/walue_whatsapp_provider.api.embedded_signup.callback"
-    )
+
+    # Get base URL without port for ngrok
+    site_url = frappe.utils.get_url()
+    
+    # Remove port if present (ngrok doesn't need it)
+    if ':8000' in site_url or ':443' in site_url:
+        site_url = site_url.replace(':8000', '').replace(':443', '')
+    
+    # Build callback URL
+    callback_url = f"{site_url}/api/method/walue_whatsapp_provider.api.embedded_signup.callback"
+    
+    # # Get callback URL
+    # callback_url = frappe.utils.get_url(
+    #     "/api/method/walue_whatsapp_provider.api.embedded_signup.callback"
+    # )
 
     # Build OAuth URL for embedded signup
     # Reference: https://developers.facebook.com/docs/whatsapp/embedded-signup/oauth-flow
