@@ -469,33 +469,78 @@ def _exchange_code_for_token(settings, code: str) -> dict:
 
 
 def _get_waba_details(access_token: str) -> dict:
-    """Get WABA details using the access token"""
+    """
+    Get WABA details using the access token.
+
+    Tries multiple approaches since /me/whatsapp_business_accounts doesn't work
+    with redirect OAuth tokens:
+    1. First try /me?fields=businesses to get business IDs
+    2. Then query each business for owned_whatsapp_business_accounts
+    3. Fallback to direct /me/whatsapp_business_accounts (might work for some tokens)
+    """
     waba_id = None
     phone_number_id = None
     phone_number = None
     business_id = None
 
-    # Get WABA from shared accounts
-    waba_url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/me/whatsapp_business_accounts"
-    _log_debug("Getting WABA list", f"url: {waba_url}")
+    # Approach 1: Get businesses first, then query for WABAs
+    _log_debug("Getting businesses", "Trying /me?fields=businesses approach")
 
-    waba_response = requests.get(waba_url, params={"access_token": access_token})
+    me_url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/me"
+    me_response = requests.get(me_url, params={
+        "access_token": access_token,
+        "fields": "id,name,businesses{id,name}"
+    })
 
-    _log_debug("WABA list response", f"status: {waba_response.status_code}, body: {waba_response.text[:500]}")
+    _log_debug("Me response", f"status: {me_response.status_code}, body: {me_response.text[:500]}")
 
-    if not waba_response.ok:
-        _log_debug("WABA list failed", f"Status: {waba_response.status_code}, Response: {waba_response.text[:500]}")
-        return {"waba_id": None, "phone_number_id": None, "phone_number": None, "business_id": None}
+    if me_response.ok:
+        me_data = me_response.json()
+        businesses = me_data.get("businesses", {}).get("data", [])
+        _log_debug("Businesses found", f"count: {len(businesses)}, data: {businesses}")
 
-    waba_data = waba_response.json()
-    _log_debug("WABA data parsed", f"data count: {len(waba_data.get('data', []))}")
+        # Try each business to find WABAs
+        for biz in businesses:
+            biz_id = biz.get("id")
+            if not biz_id:
+                continue
 
-    if waba_data.get("data"):
-        waba_info = waba_data["data"][0]
-        waba_id = waba_info.get("id")
-        _log_debug("WABA info", f"waba_id: {waba_id}, full_info: {waba_info}")
+            _log_debug("Checking business for WABA", f"business_id: {biz_id}, name: {biz.get('name')}")
 
-        # Get phone numbers for this WABA
+            # Query owned_whatsapp_business_accounts for this business
+            waba_url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{biz_id}/owned_whatsapp_business_accounts"
+            waba_response = requests.get(waba_url, params={"access_token": access_token})
+
+            _log_debug("Business WABA response", f"status: {waba_response.status_code}, body: {waba_response.text[:500]}")
+
+            if waba_response.ok:
+                waba_data = waba_response.json()
+                if waba_data.get("data"):
+                    waba_info = waba_data["data"][0]
+                    waba_id = waba_info.get("id")
+                    business_id = biz_id
+                    _log_debug("Found WABA via business", f"waba_id: {waba_id}, business_id: {business_id}")
+                    break
+
+    # Approach 2: Fallback to direct query (might work for some token types)
+    if not waba_id:
+        _log_debug("Trying direct WABA query", "Fallback to /me/whatsapp_business_accounts")
+
+        waba_url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/me/whatsapp_business_accounts"
+        waba_response = requests.get(waba_url, params={"access_token": access_token})
+
+        _log_debug("Direct WABA response", f"status: {waba_response.status_code}, body: {waba_response.text[:500]}")
+
+        if waba_response.ok:
+            waba_data = waba_response.json()
+            if waba_data.get("data"):
+                waba_info = waba_data["data"][0]
+                waba_id = waba_info.get("id")
+                business_id = waba_info.get("business_id") or waba_info.get("owner_business_info", {}).get("id")
+                _log_debug("Found WABA via direct query", f"waba_id: {waba_id}")
+
+    # If we have WABA ID, get phone numbers
+    if waba_id:
         phone_url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{waba_id}/phone_numbers"
         _log_debug("Getting phone numbers", f"url: {phone_url}")
 
@@ -510,10 +555,7 @@ def _get_waba_details(access_token: str) -> dict:
                 phone_info = phone_data["data"][0]
                 phone_number_id = phone_info.get("id")
                 phone_number = phone_info.get("display_phone_number")
-                _log_debug("Phone info", f"phone_id: {phone_number_id}, phone: {phone_number}, full: {phone_info}")
-
-        # Get business ID from WABA info if available
-        business_id = waba_info.get("business_id") or waba_info.get("owner_business_info", {}).get("id")
+                _log_debug("Phone info", f"phone_id: {phone_number_id}, phone: {phone_number}")
 
     result = {
         "waba_id": waba_id,
