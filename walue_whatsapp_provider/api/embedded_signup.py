@@ -297,7 +297,8 @@ def complete() -> dict:
         if not access_token and code:
             try:
                 settings = frappe.get_single("WhatsApp Provider Settings")
-                token_data = _exchange_code_for_token(settings, code)
+                # from_js_sdk=True because complete() is called from frontend JS SDK flow
+                token_data = _exchange_code_for_token(settings, code, from_js_sdk=True)
                 access_token = token_data.get("access_token")
                 _log_debug("Token exchanged", f"Got access token: {bool(access_token)}")
             except Exception as e:
@@ -441,23 +442,33 @@ def _build_embedded_signup_url(settings, session_id: str, customer_id: str) -> s
     return f"{base_url}?{query_string}"
 
 
-def _exchange_code_for_token(settings, code: str) -> dict:
-    """Exchange OAuth code for access token"""
-    # Get base URL without port for ngrok
-    site_url = frappe.utils.get_url()
-    if ':8000' in site_url or ':443' in site_url:
-        site_url = site_url.replace(':8000', '').replace(':443', '')
-    callback_url = f"{site_url}/api/method/walue_whatsapp_provider.api.embedded_signup.callback"
+def _exchange_code_for_token(settings, code: str, from_js_sdk: bool = False) -> dict:
+    """
+    Exchange OAuth code for access token
 
+    Args:
+        settings: WhatsApp Provider Settings document
+        code: OAuth authorization code
+        from_js_sdk: If True, code came from FB.login (JS SDK) - no redirect_uri needed
+                     If False, code came from redirect flow - redirect_uri required
+    """
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/oauth/access_token"
     params = {
         "client_id": settings.meta_app_id,
         "client_secret": settings.get_password("meta_app_secret"),
         "code": code,
-        "redirect_uri": callback_url,
     }
 
-    _log_debug("Token exchange request", f"url: {url}, redirect_uri: {callback_url}")
+    # Only include redirect_uri for redirect flow, NOT for JS SDK flow
+    if not from_js_sdk:
+        site_url = frappe.utils.get_url()
+        if ':8000' in site_url or ':443' in site_url:
+            site_url = site_url.replace(':8000', '').replace(':443', '')
+        callback_url = f"{site_url}/api/method/walue_whatsapp_provider.api.embedded_signup.callback"
+        params["redirect_uri"] = callback_url
+        _log_debug("Token exchange request", f"url: {url}, redirect_uri: {callback_url}")
+    else:
+        _log_debug("Token exchange request (JS SDK)", f"url: {url}, no redirect_uri")
 
     response = requests.get(url, params=params)
 
