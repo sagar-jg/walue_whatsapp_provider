@@ -145,9 +145,10 @@ def send_template():
     if not all([phone_number_id, to_number, template_name]):
         frappe.throw(_("Missing required parameters: phone_number_id, to, template_name"))
 
-    # 4. Calculate cost and check quota BEFORE calling Meta
+    # 5. Calculate cost and check quota BEFORE calling Meta
     cost_info = _calculate_total_cost(TEMPLATE_MESSAGE_COST, customer_id)
-    enforce_quota(customer_id, cost_info["total_cost"])
+    # TODO: Enable quota enforcement when billing goes live
+    # enforce_quota(customer_id, cost_info["total_cost"])
 
     # 5. Build and send Meta API request
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/messages"
