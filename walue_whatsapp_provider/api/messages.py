@@ -95,15 +95,33 @@ def send_template():
     Returns:
         dict: Contains message_id, cost info, and new balance
     """
+    print("[SEND_TEMPLATE] Starting send_template request")
+    print(f"[SEND_TEMPLATE] Headers: X-Client-ID={frappe.request.headers.get('X-Client-ID')}, X-Meta-Token={'present' if frappe.request.headers.get('X-Meta-Token') else 'missing'}")
+
     # 1. Authenticate customer
-    customer_info = authenticate_request()
-    customer_id = customer_info["customer_id"]
+    try:
+        customer_info = authenticate_request()
+        customer_id = customer_info["customer_id"]
+        print(f"[SEND_TEMPLATE] Authenticated customer: {customer_id}")
+    except Exception as e:
+        print(f"[SEND_TEMPLATE] Authentication failed: {e}")
+        raise
 
     # 2. Enforce rate limit
-    enforce_rate_limit(customer_id, "send_template")
+    try:
+        enforce_rate_limit(customer_id, "send_template")
+        print(f"[SEND_TEMPLATE] Rate limit OK for {customer_id}")
+    except Exception as e:
+        print(f"[SEND_TEMPLATE] Rate limit failed: {e}")
+        raise
 
     # 3. Get Meta token from header
-    access_token = get_meta_token()
+    try:
+        access_token = get_meta_token()
+        print(f"[SEND_TEMPLATE] Meta token present: {bool(access_token)}")
+    except Exception as e:
+        print(f"[SEND_TEMPLATE] Meta token missing: {e}")
+        raise
 
     # 3. Parse request body
     data = frappe.parse_json(frappe.request.data)
