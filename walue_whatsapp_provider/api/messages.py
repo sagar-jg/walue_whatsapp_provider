@@ -142,6 +142,8 @@ def send_template():
     template_language = data.get("template_language", "en_US")
     template_components = data.get("template_components", [])
 
+    print(f"[SEND_TEMPLATE] Parsed data: phone_number_id={phone_number_id}, to={to_number}, template={template_name}")
+
     if not all([phone_number_id, to_number, template_name]):
         frappe.throw(_("Missing required parameters: phone_number_id, to, template_name"))
 
@@ -150,8 +152,9 @@ def send_template():
     # TODO: Enable quota enforcement when billing goes live
     # enforce_quota(customer_id, cost_info["total_cost"])
 
-    # 5. Build and send Meta API request
+    # 6. Build and send Meta API request
     url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/messages"
+    print(f"[SEND_TEMPLATE] Meta API URL: {url}")
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
@@ -170,8 +173,11 @@ def send_template():
         payload["template"]["components"] = template_components
 
     try:
+        print(f"[SEND_TEMPLATE] Sending to Meta: {json.dumps(payload)}")
         response = requests.post(url, json=payload, headers=headers, timeout=30)
         response_data = response.json()
+        print(f"[SEND_TEMPLATE] Meta response status: {response.status_code}")
+        print(f"[SEND_TEMPLATE] Meta response: {json.dumps(response_data)}")
 
         if response.status_code != 200:
             error_msg = response_data.get("error", {}).get("message", ERR_META_API)
