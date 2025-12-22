@@ -16,6 +16,7 @@ Flow:
 import frappe
 from frappe import _
 from datetime import datetime
+import json
 
 from walue_whatsapp_provider.constants import (
     ERR_INVALID_TOKEN,
@@ -47,7 +48,14 @@ def exchange_token():
             - meta_business_id
             - meta_access_token
     """
-    data = frappe.parse_json(frappe.request.data) if frappe.request.data else {}
+    # Parse JSON from request body
+    data = {}
+    if frappe.request.data:
+        raw_data = frappe.request.data
+        if isinstance(raw_data, bytes):
+            raw_data = raw_data.decode('utf-8')
+        data = json.loads(raw_data) if raw_data else {}
+
     setup_token = data.get("setup_token") or frappe.form_dict.get("setup_token")
 
     if not setup_token:
@@ -197,7 +205,14 @@ def regenerate_token():
     if "System Manager" not in frappe.get_roles():
         frappe.throw(_("Not authorized"), frappe.PermissionError)
 
-    data = frappe.parse_json(frappe.request.data)
+    # Parse JSON from request body
+    data = {}
+    if frappe.request.data:
+        raw_data = frappe.request.data
+        if isinstance(raw_data, bytes):
+            raw_data = raw_data.decode('utf-8')
+        data = json.loads(raw_data) if raw_data else {}
+
     customer_id = data.get("customer_id")
 
     if not customer_id:
