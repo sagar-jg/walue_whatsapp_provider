@@ -91,7 +91,12 @@ def exchange_token():
         frappe.throw(_("WABA credentials not found. Please complete embedded signup or contact support."), frappe.ValidationError)
 
     # Build response with full configuration
+    # Remove port numbers from URL (ngrok/production don't need them)
     provider_url = frappe.utils.get_url()
+    if ':8000' in provider_url:
+        provider_url = provider_url.replace(':8000', '')
+    if ':443' in provider_url:
+        provider_url = provider_url.replace(':443', '')
 
     response_data = {
         "success": True,
