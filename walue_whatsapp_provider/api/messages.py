@@ -17,6 +17,7 @@ CRITICAL: We do NOT store message content - only count and cost metrics.
 import frappe
 from frappe import _
 import requests
+import json
 from datetime import datetime, date
 
 from walue_whatsapp_provider.constants import (
@@ -31,6 +32,16 @@ from walue_whatsapp_provider.utils.auth import (
     deduct_balance,
 )
 from walue_whatsapp_provider.api.rate_limit import enforce_rate_limit
+
+
+def _parse_request_body() -> dict:
+    """Parse JSON from request body, handling bytes properly"""
+    if not frappe.request.data:
+        return {}
+    raw_data = frappe.request.data
+    if isinstance(raw_data, bytes):
+        raw_data = raw_data.decode('utf-8')
+    return json.loads(raw_data) if raw_data else {}
 
 
 # =============================================================================
@@ -123,8 +134,8 @@ def send_template():
         print(f"[SEND_TEMPLATE] Meta token missing: {e}")
         raise
 
-    # 3. Parse request body
-    data = frappe.parse_json(frappe.request.data)
+    # 4. Parse request body
+    data = _parse_request_body()
     phone_number_id = data.get("phone_number_id")
     to_number = data.get("to")
     template_name = data.get("template_name")
@@ -220,7 +231,7 @@ def send_text():
     access_token = get_meta_token()
 
     # 4. Parse request
-    data = frappe.parse_json(frappe.request.data)
+    data = _parse_request_body()
     phone_number_id = data.get("phone_number_id")
     to_number = data.get("to")
     text = data.get("text")
@@ -301,7 +312,7 @@ def send_media():
 
     access_token = get_meta_token()
 
-    data = frappe.parse_json(frappe.request.data)
+    data = _parse_request_body()
     phone_number_id = data.get("phone_number_id")
     to_number = data.get("to")
     media_type = data.get("media_type")
