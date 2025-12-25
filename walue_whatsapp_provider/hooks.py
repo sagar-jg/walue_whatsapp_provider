@@ -185,3 +185,8 @@ fixtures = [
 #     "walue_whatsapp_provider.api.embedded_signup.initiate",
 #     "walue_whatsapp_provider.api.embedded_signup.callback",
 # }
+
+# Bench Commands
+# --------------
+# Custom bench commands for this app
+# Usage: bench --site [sitename] import-walue-pages
