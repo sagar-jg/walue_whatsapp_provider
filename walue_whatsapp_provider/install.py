@@ -7,6 +7,20 @@ import json
 import frappe
 
 
+@frappe.whitelist()
+def reimport_web_pages():
+    """
+    API endpoint to reimport Web Pages
+    Call: /api/method/walue_whatsapp_provider.install.reimport_web_pages
+    """
+    # Check if user is System Manager
+    if "System Manager" not in frappe.get_roles():
+        frappe.throw("Only System Manager can reimport web pages")
+
+    import_web_pages()
+    return {"success": True, "message": "Web Pages imported successfully"}
+
+
 def after_install():
     """
     Import Web Page fixtures after app installation
