@@ -1,7 +1,7 @@
 app_name = "walue_whatsapp_provider"
 app_title = "Walue WhatsApp Provider"
 app_publisher = "Walue Biz"
-app_description = "WhatsApp Calling & Messaging Provider Platform - Central management for customer accounts, Meta API proxy, Janus WebRTC gateway, and billing"
+app_description = "WhatsApp Calling & Messaging Provider Platform - Central management for customer accounts, Meta API proxy, and billing"
 app_email = "support@walue.biz"
 app_license = "MIT"
 app_version = "0.0.1"

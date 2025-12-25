@@ -2,7 +2,7 @@
 WhatsApp Provider Settings - Single DocType
 
 Central configuration for the WhatsApp Provider platform.
-Contains Meta API credentials, Janus configuration, and OAuth settings.
+Contains Meta API credentials, TURN/STUN servers, and OAuth settings.
 """
 
 import frappe

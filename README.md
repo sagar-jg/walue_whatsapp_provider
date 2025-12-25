@@ -8,7 +8,6 @@ This is the **provider-side** Frappe app for Walue Biz's WhatsApp SaaS platform.
 
 - Customer accounts and subscriptions
 - Meta WhatsApp Business API proxy
-- Janus WebRTC gateway integration
 - OAuth authentication for customer apps
 - Aggregated usage metrics and billing
 
@@ -23,8 +22,8 @@ bench --site your-site install-app walue_whatsapp_provider
 
 1. Go to **WhatsApp Provider Settings**
 2. Enter your Meta App ID and App Secret
-3. Configure Janus WebRTC gateway URL
-4. Set webhook verify token
+3. Set webhook verify token
+4. Configure TURN/STUN servers (optional, for NAT traversal)
 
 ## DocTypes
 

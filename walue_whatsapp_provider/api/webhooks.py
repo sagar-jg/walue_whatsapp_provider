@@ -452,9 +452,7 @@ def _forward_to_customer(customer, webhook_data: dict):
 @frappe.whitelist(allow_guest=True, methods=["POST"])
 def call_status():
     """
-    Handle call status webhooks
-
-    These may come from Janus or from Meta depending on implementation.
+    Handle call status webhooks from Meta.
     Routes to customer for local storage.
     """
     if not _verify_signature():
