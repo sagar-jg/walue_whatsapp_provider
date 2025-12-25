@@ -293,9 +293,123 @@ def send_text():
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
+def upload_media():
+    """
+    Upload media to Meta WhatsApp Business API (Method 1 - Step 1)
+
+    This uploads the file to Meta and returns a media_id that can be used
+    to send media messages.
+
+    Headers Required:
+        X-Client-ID, X-Client-Secret, X-Meta-Token
+
+    POST Body (multipart/form-data):
+        phone_number_id: Customer's WhatsApp phone number ID
+        file: The file to upload
+        media_type: 'image', 'video', 'document', or 'audio'
+
+    Returns:
+        dict: Contains media_id on success
+    """
+    print("[UPLOAD_MEDIA] Starting upload_media request")
+
+    # 1. Authenticate
+    customer_info = authenticate_request()
+    customer_id = customer_info["customer_id"]
+    print(f"[UPLOAD_MEDIA] Authenticated customer: {customer_id}")
+
+    # 2. Enforce rate limit
+    enforce_rate_limit(customer_id, "send_media")
+
+    # 3. Get Meta token
+    access_token = get_meta_token()
+
+    # 4. Get form data
+    phone_number_id = frappe.form_dict.get("phone_number_id")
+    media_type = frappe.form_dict.get("media_type", "image")
+
+    print(f"[UPLOAD_MEDIA] phone_number_id={phone_number_id}, media_type={media_type}")
+
+    if not phone_number_id:
+        frappe.throw(_("Missing required parameter: phone_number_id"))
+
+    # Get uploaded file
+    if not frappe.request.files:
+        frappe.throw(_("No file uploaded"))
+
+    file_obj = frappe.request.files.get("file")
+    if not file_obj:
+        frappe.throw(_("No file found in request"))
+
+    print(f"[UPLOAD_MEDIA] File received: {file_obj.filename}, content_type={file_obj.content_type}")
+
+    # Map media type to MIME type for Meta API
+    mime_type = file_obj.content_type
+    if not mime_type:
+        # Fallback based on media_type
+        mime_types = {
+            "image": "image/jpeg",
+            "video": "video/mp4",
+            "audio": "audio/mpeg",
+            "document": "application/pdf",
+        }
+        mime_type = mime_types.get(media_type, "application/octet-stream")
+
+    # 5. Upload to Meta API
+    url = f"{META_API_BASE_URL}/{META_API_DEFAULT_VERSION}/{phone_number_id}/media"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+    }
+
+    # Read file content
+    file_content = file_obj.read()
+    print(f"[UPLOAD_MEDIA] File size: {len(file_content)} bytes")
+
+    files = {
+        "file": (file_obj.filename, file_content, mime_type),
+    }
+    data = {
+        "messaging_product": "whatsapp",
+        "type": mime_type,
+    }
+
+    try:
+        print(f"[UPLOAD_MEDIA] Uploading to Meta: {url}")
+        response = requests.post(url, headers=headers, files=files, data=data, timeout=60)
+        response_data = response.json()
+
+        print(f"[UPLOAD_MEDIA] Meta response status: {response.status_code}")
+        print(f"[UPLOAD_MEDIA] Meta response: {json.dumps(response_data)}")
+
+        if response.status_code != 200:
+            error_msg = response_data.get("error", {}).get("message", ERR_META_API)
+            return {"success": False, "error": error_msg}
+
+        media_id = response_data.get("id")
+        if not media_id:
+            return {"success": False, "error": "No media_id returned from Meta"}
+
+        print(f"[UPLOAD_MEDIA] Success! media_id={media_id}")
+
+        return {
+            "success": True,
+            "media_id": media_id,
+        }
+
+    except requests.RequestException as e:
+        frappe.log_error(f"Meta API media upload failed: {str(e)}")
+        print(f"[UPLOAD_MEDIA] Error: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
 def send_media():
     """
     Proxy: Send media message (image, video, document) via Meta API
+
+    Supports two methods:
+    - Method 1: Use media_id (preferred - upload first with upload_media)
+    - Method 2: Use media_url (direct link - may not work for all URLs)
 
     Headers Required:
         X-Client-ID, X-Client-Secret, X-Meta-Token
@@ -304,15 +418,19 @@ def send_media():
         phone_number_id: Customer's WhatsApp phone number ID
         to: Recipient phone number
         media_type: 'image', 'video', 'document', or 'audio'
-        media_url: URL of the media file
+        media_id: Media ID from upload_media (Method 1 - preferred)
+        media_url: URL of the media file (Method 2 - fallback)
         caption: Optional caption for images/videos
         filename: Required for documents
 
     Returns:
         dict: Contains message_id and balance info
     """
+    print("[SEND_MEDIA] Starting send_media request")
+
     customer_info = authenticate_request()
     customer_id = customer_info["customer_id"]
+    print(f"[SEND_MEDIA] Authenticated customer: {customer_id}")
 
     # Enforce rate limit (media has lower limit)
     enforce_rate_limit(customer_id, "send_media")
@@ -323,12 +441,19 @@ def send_media():
     phone_number_id = data.get("phone_number_id")
     to_number = data.get("to")
     media_type = data.get("media_type")
-    media_url = data.get("media_url")
+    media_id = data.get("media_id")  # Method 1 - preferred
+    media_url = data.get("media_url")  # Method 2 - fallback
     caption = data.get("caption")
     filename = data.get("filename")
 
-    if not all([phone_number_id, to_number, media_type, media_url]):
-        frappe.throw(_("Missing required parameters"))
+    print(f"[SEND_MEDIA] phone_number_id={phone_number_id}, to={to_number}, media_type={media_type}")
+    print(f"[SEND_MEDIA] media_id={media_id}, media_url={media_url}")
+
+    if not all([phone_number_id, to_number, media_type]):
+        frappe.throw(_("Missing required parameters: phone_number_id, to, media_type"))
+
+    if not media_id and not media_url:
+        frappe.throw(_("Either media_id or media_url is required"))
 
     if media_type not in ["image", "video", "document", "audio"]:
         frappe.throw(_("Invalid media_type"))
@@ -342,7 +467,14 @@ def send_media():
         "Content-Type": "application/json",
     }
 
-    media_object = {"link": media_url}
+    # Build media object - prefer media_id (Method 1)
+    if media_id:
+        print(f"[SEND_MEDIA] Using Method 1 (media_id)")
+        media_object = {"id": media_id}
+    else:
+        print(f"[SEND_MEDIA] Using Method 2 (link)")
+        media_object = {"link": media_url}
+
     if caption and media_type in ["image", "video"]:
         media_object["caption"] = caption
     if filename and media_type == "document":
@@ -357,8 +489,12 @@ def send_media():
     }
 
     try:
+        print(f"[SEND_MEDIA] Sending to Meta: {json.dumps(payload)}")
         response = requests.post(url, json=payload, headers=headers, timeout=30)
         response_data = response.json()
+
+        print(f"[SEND_MEDIA] Meta response status: {response.status_code}")
+        print(f"[SEND_MEDIA] Meta response: {json.dumps(response_data)}")
 
         if response.status_code != 200:
             error_msg = response_data.get("error", {}).get("message", ERR_META_API)
@@ -380,6 +516,7 @@ def send_media():
 
     except requests.RequestException as e:
         frappe.log_error(f"Meta API request failed: {str(e)}")
+        print(f"[SEND_MEDIA] Error: {str(e)}")
         return {"success": False, "error": ERR_META_API}
 
 

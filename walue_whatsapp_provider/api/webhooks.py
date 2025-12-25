@@ -248,7 +248,7 @@ def _route_message_webhook(customer, value: dict):
 
     Webhook types:
     - statuses: Message status updates (sent, delivered, read, failed)
-    - messages: Inbound messages
+    - messages: Inbound messages (text, image, video, audio, document, etc.)
     """
     metadata = value.get("metadata", {})
     phone_number_id = metadata.get("phone_number_id")
@@ -269,15 +269,128 @@ def _route_message_webhook(customer, value: dict):
     # Process inbound messages
     messages = value.get("messages", [])
     for message in messages:
-        _forward_to_customer(customer, {
+        msg_type = message.get("type")
+
+        # Log the full raw message for debugging
+        print(f"[INBOUND MESSAGE] Raw message: {json.dumps(message)}")
+        print(f"[INBOUND MESSAGE] Type: {msg_type}, From: {message.get('from')}")
+
+        # Build webhook payload with all message types
+        webhook_data = {
             "type": WEBHOOK_INBOUND_MESSAGE,
             "message_id": message.get("id"),
             "from": message.get("from"),
             "timestamp": message.get("timestamp"),
-            "message_type": message.get("type"),
-            "text": message.get("text", {}).get("body") if message.get("type") == "text" else None,
-            # Include other message types as needed
-        })
+            "message_type": msg_type,
+        }
+
+        # Handle different message types
+        if msg_type == "text":
+            webhook_data["text"] = message.get("text", {}).get("body")
+            print(f"[INBOUND MESSAGE] Text: {webhook_data['text']}")
+
+        elif msg_type == "image":
+            image_data = message.get("image", {})
+            webhook_data["media"] = {
+                "id": image_data.get("id"),
+                "mime_type": image_data.get("mime_type"),
+                "sha256": image_data.get("sha256"),
+                "caption": image_data.get("caption"),
+            }
+            print(f"[INBOUND MESSAGE] Image: id={image_data.get('id')}, mime_type={image_data.get('mime_type')}")
+
+        elif msg_type == "video":
+            video_data = message.get("video", {})
+            webhook_data["media"] = {
+                "id": video_data.get("id"),
+                "mime_type": video_data.get("mime_type"),
+                "sha256": video_data.get("sha256"),
+                "caption": video_data.get("caption"),
+            }
+            print(f"[INBOUND MESSAGE] Video: id={video_data.get('id')}, mime_type={video_data.get('mime_type')}")
+
+        elif msg_type == "audio":
+            audio_data = message.get("audio", {})
+            webhook_data["media"] = {
+                "id": audio_data.get("id"),
+                "mime_type": audio_data.get("mime_type"),
+                "sha256": audio_data.get("sha256"),
+                "voice": audio_data.get("voice", False),
+            }
+            print(f"[INBOUND MESSAGE] Audio: id={audio_data.get('id')}, mime_type={audio_data.get('mime_type')}, voice={audio_data.get('voice')}")
+
+        elif msg_type == "document":
+            doc_data = message.get("document", {})
+            webhook_data["media"] = {
+                "id": doc_data.get("id"),
+                "mime_type": doc_data.get("mime_type"),
+                "sha256": doc_data.get("sha256"),
+                "filename": doc_data.get("filename"),
+                "caption": doc_data.get("caption"),
+            }
+            print(f"[INBOUND MESSAGE] Document: id={doc_data.get('id')}, filename={doc_data.get('filename')}, mime_type={doc_data.get('mime_type')}")
+
+        elif msg_type == "sticker":
+            sticker_data = message.get("sticker", {})
+            webhook_data["media"] = {
+                "id": sticker_data.get("id"),
+                "mime_type": sticker_data.get("mime_type"),
+                "sha256": sticker_data.get("sha256"),
+                "animated": sticker_data.get("animated", False),
+            }
+            print(f"[INBOUND MESSAGE] Sticker: id={sticker_data.get('id')}, animated={sticker_data.get('animated')}")
+
+        elif msg_type == "location":
+            location_data = message.get("location", {})
+            webhook_data["location"] = {
+                "latitude": location_data.get("latitude"),
+                "longitude": location_data.get("longitude"),
+                "name": location_data.get("name"),
+                "address": location_data.get("address"),
+            }
+            print(f"[INBOUND MESSAGE] Location: lat={location_data.get('latitude')}, lon={location_data.get('longitude')}")
+
+        elif msg_type == "contacts":
+            webhook_data["contacts"] = message.get("contacts", [])
+            print(f"[INBOUND MESSAGE] Contacts: {len(webhook_data['contacts'])} contact(s)")
+
+        elif msg_type == "button":
+            button_data = message.get("button", {})
+            webhook_data["button"] = {
+                "text": button_data.get("text"),
+                "payload": button_data.get("payload"),
+            }
+            print(f"[INBOUND MESSAGE] Button reply: {button_data.get('text')}")
+
+        elif msg_type == "interactive":
+            interactive_data = message.get("interactive", {})
+            webhook_data["interactive"] = interactive_data
+            print(f"[INBOUND MESSAGE] Interactive: {json.dumps(interactive_data)}")
+
+        elif msg_type == "reaction":
+            reaction_data = message.get("reaction", {})
+            webhook_data["reaction"] = {
+                "message_id": reaction_data.get("message_id"),
+                "emoji": reaction_data.get("emoji"),
+            }
+            print(f"[INBOUND MESSAGE] Reaction: emoji={reaction_data.get('emoji')} on message {reaction_data.get('message_id')}")
+
+        else:
+            # Unknown type - include raw data for debugging
+            webhook_data["raw_data"] = message
+            print(f"[INBOUND MESSAGE] Unknown type '{msg_type}': {json.dumps(message)}")
+
+        # Include context if message is a reply
+        context = message.get("context")
+        if context:
+            webhook_data["context"] = {
+                "message_id": context.get("id"),
+                "from": context.get("from"),
+            }
+            print(f"[INBOUND MESSAGE] Reply to message: {context.get('id')}")
+
+        print(f"[INBOUND MESSAGE] Forwarding to customer: {json.dumps(webhook_data)}")
+        _forward_to_customer(customer, webhook_data)
 
     # Process call permission replies
     # These come through interactive message responses
