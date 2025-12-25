@@ -190,9 +190,9 @@ def callback():
 
         # Redirect to success page
         # If website is hosted separately, change this URL to point to your website
-        # Default: use the /whatsapp-success page on the provider site
+        # Default: use the /walue-success page on the provider site
         base_url = frappe.utils.get_url()
-        success_url = f"{base_url}/whatsapp-success?customer_id={customer.name}&session_id={session.session_id}"
+        success_url = f"{base_url}/walue-success?customer_id={customer.name}&session_id={session.session_id}"
 
         _log_debug("Redirecting to success", f"url: {success_url}")
 
