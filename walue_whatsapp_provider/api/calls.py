@@ -3,8 +3,8 @@ Call Management API - Proxy for WhatsApp Business Calling
 
 This module handles:
 1. Call permission requests (proxy to Meta API)
-2. Call initiation via Janus WebRTC gateway
-3. Call termination and duration tracking
+2. Call connect/accept/reject/terminate (proxy to Meta API)
+3. Call duration tracking and billing
 
 CRITICAL: We do NOT store call details - only aggregated metrics
 - NO lead_id or user info stored
@@ -17,7 +17,6 @@ from frappe import _
 import requests
 import json
 from datetime import datetime, date
-import secrets
 
 from walue_whatsapp_provider.constants import (
     META_API_BASE_URL,
@@ -25,7 +24,6 @@ from walue_whatsapp_provider.constants import (
     CALLING_RESTRICTED_COUNTRIES,
     ERR_META_API,
     ERR_INVALID_TOKEN,
-    ERR_JANUS_CONNECTION,
     MSG_CALLING_NOT_AVAILABLE,
     CUSTOMER_STATUS_ACTIVE,
 )
@@ -174,102 +172,12 @@ def request_permission():
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
-def initiate():
-    """
-    Initiate a WhatsApp call via Janus WebRTC gateway
-
-    This creates a Janus session and returns WebRTC connection details.
-    The actual call routing depends on Janus SIP plugin configuration.
-
-    POST Body (JSON):
-        phone_number_id: Customer's WhatsApp phone number ID
-        access_token: Customer's Meta access token
-        to: Recipient phone number (E.164 format)
-        from_number: Caller's WhatsApp number
-
-    Returns:
-        dict: Contains Janus session details for WebRTC connection
-            - call_session_id: Unique session identifier
-            - janus_session_id: Janus session ID
-            - janus_handle_id: Janus plugin handle ID
-            - ice_servers: STUN/TURN server configuration
-
-    Note: We do NOT receive/store lead_id or user info
-    """
-    customer_info = _authenticate_request()
-
-    # Enforce rate limit for call initiation
-    enforce_rate_limit(customer_info["customer_id"], "initiate")
-
-    data = frappe.parse_json(frappe.request.data)
-
-    phone_number_id = data.get("phone_number_id")
-    access_token = data.get("access_token")
-    to_number = data.get("to")
-    from_number = data.get("from_number")
-
-    if not all([phone_number_id, access_token, to_number, from_number]):
-        frappe.throw(_("Missing required parameters"))
-
-    # Check if calling is available for this region
-    country_code = _extract_country_code(to_number)
-    if country_code in CALLING_RESTRICTED_COUNTRIES:
-        return {
-            "success": False,
-            "error": MSG_CALLING_NOT_AVAILABLE,
-            "restricted": True,
-        }
-
-    # Generate unique call session ID
-    call_session_id = secrets.token_urlsafe(24)
-
-    try:
-        # Create Janus session
-        janus_session = _create_janus_session(customer_info["customer_id"])
-
-        if not janus_session:
-            return {"success": False, "error": ERR_JANUS_CONNECTION}
-
-        # Store session metadata in cache (temporary, not in DB)
-        frappe.cache().set_value(
-            f"call_session:{call_session_id}",
-            {
-                "customer_id": customer_info["customer_id"],
-                "janus_session_id": janus_session["session_id"],
-                "janus_handle_id": janus_session["handle_id"],
-                "janus_room_id": janus_session.get("room_id"),
-                "started_at": datetime.now().isoformat(),
-                "status": "initiating",
-            },
-            expires_in_sec=3600  # 1 hour max
-        )
-
-        # Get STUN/TURN servers
-        settings = frappe.get_single("WhatsApp Provider Settings")
-        ice_servers = _get_ice_servers(settings)
-
-        return {
-            "success": True,
-            "call_session_id": call_session_id,
-            "janus_session_id": janus_session["session_id"],
-            "janus_handle_id": janus_session["handle_id"],
-            "janus_room_id": janus_session.get("room_id"),
-            "janus_ws_url": settings.janus_ws_url,
-            "ice_servers": ice_servers,
-        }
-
-    except Exception as e:
-        frappe.log_error(f"Call initiation failed: {str(e)}")
-        return {"success": False, "error": ERR_JANUS_CONNECTION}
-
-
-@frappe.whitelist(allow_guest=True, methods=["POST"])
 def end():
     """
     End a call and record usage metrics
 
     POST Body (JSON):
-        call_session_id: The session ID from initiate()
+        call_session_id: Call session identifier
         duration_seconds: Actual call duration
 
     Returns:
@@ -280,29 +188,19 @@ def end():
     """
     customer_info = _authenticate_request()
 
-    data = frappe.parse_json(frappe.request.data)
+    try:
+        raw_data = frappe.request.data
+        if isinstance(raw_data, bytes):
+            raw_data = raw_data.decode('utf-8')
+        data = frappe.parse_json(raw_data) if raw_data else {}
+    except Exception as parse_error:
+        return {"success": False, "error": f"Invalid JSON payload: {str(parse_error)}"}
 
     call_session_id = data.get("call_session_id")
     duration_seconds = data.get("duration_seconds", 0)
 
     if not call_session_id:
         frappe.throw(_("Missing call_session_id"))
-
-    # Get session from cache
-    session_data = frappe.cache().get_value(f"call_session:{call_session_id}")
-
-    if not session_data:
-        return {"success": False, "error": "Session not found or expired"}
-
-    if session_data["customer_id"] != customer_info["customer_id"]:
-        return {"success": False, "error": "Session does not belong to this customer"}
-
-    # Clean up Janus session
-    _cleanup_janus_session(
-        session_data["janus_session_id"],
-        session_data["janus_handle_id"],
-        session_data.get("janus_room_id")
-    )
 
     # Calculate cost
     customer = frappe.get_doc("WhatsApp Customer", customer_info["customer_id"])
@@ -314,9 +212,6 @@ def end():
         duration_seconds=duration_seconds,
         cost=cost,
     )
-
-    # Remove session from cache
-    frappe.cache().delete_value(f"call_session:{call_session_id}")
 
     return {
         "success": True,
@@ -864,61 +759,6 @@ def connect():
     except requests.RequestException as e:
         frappe.log_error(f"Meta API connect call failed: {str(e)}")
         return {"success": False, "error": ERR_META_API}
-
-
-def _create_janus_session(customer_id: str) -> dict:
-    """
-    Create a Janus WebRTC session for WhatsApp calling
-
-    Creates session, attaches AudioBridge plugin, and creates a room.
-
-    Args:
-        customer_id: Customer identifier for logging
-
-    Returns:
-        dict: Session credentials including session_id, handle_id, room_id
-    """
-    settings = frappe.get_single("WhatsApp Provider Settings")
-
-    if not settings.janus_ws_url:
-        frappe.log_error("Janus WebSocket URL not configured")
-        return None
-
-    try:
-        from walue_whatsapp_provider.utils.janus_client import create_call_session
-
-        janus_session = create_call_session(customer_id)
-
-        return {
-            "session_id": janus_session.session_id,
-            "handle_id": janus_session.handle_id,
-            "room_id": janus_session.room_id,
-        }
-
-    except Exception as e:
-        frappe.log_error(f"Janus session creation failed: {str(e)}", "Janus Call Setup")
-        return None
-
-
-def _cleanup_janus_session(session_id: str, handle_id: str, room_id: int = None):
-    """
-    Clean up Janus session after call ends
-
-    Destroys the room, detaches handles, and destroys session.
-
-    Args:
-        session_id: Janus session ID
-        handle_id: Plugin handle ID
-        room_id: AudioBridge room ID (optional)
-    """
-    try:
-        from walue_whatsapp_provider.utils.janus_client import cleanup_call_session
-
-        cleanup_call_session(session_id, handle_id, room_id)
-
-    except Exception as e:
-        # Log but don't fail - session might already be cleaned up
-        frappe.log_error(f"Janus cleanup warning: {str(e)}", "Janus Cleanup")
 
 
 def _get_ice_servers(settings) -> list:

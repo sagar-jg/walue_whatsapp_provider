@@ -85,15 +85,6 @@ QUEUE_CLEANUP = "short"
 QUEUE_WEBHOOK_PROCESSING = "default"
 
 # =============================================================================
-# JANUS WEBRTC CONFIGURATION
-# =============================================================================
-
-JANUS_DEFAULT_PORT = 8188
-JANUS_ADMIN_PORT = 7088
-JANUS_SESSION_TIMEOUT = 60  # seconds
-JANUS_ROOM_EXPIRY = 3600  # 1 hour
-
-# =============================================================================
 # CALLING AVAILABILITY BY COUNTRY
 # =============================================================================
 
@@ -127,7 +118,6 @@ ERR_WABA_NOT_FOUND = "WhatsApp Business Account not found."
 ERR_INVALID_CREDENTIALS = "Invalid credentials provided."
 ERR_RATE_LIMIT = "Rate limit exceeded. Please try again later."
 ERR_META_API = "Meta API error. Please contact support."
-ERR_JANUS_CONNECTION = "WebRTC gateway connection failed. Please try again."
 ERR_CUSTOMER_NOT_FOUND = "Customer account not found."
 ERR_INVALID_TOKEN = "Invalid or expired token."
 ERR_INSUFFICIENT_BALANCE = "Insufficient account balance."

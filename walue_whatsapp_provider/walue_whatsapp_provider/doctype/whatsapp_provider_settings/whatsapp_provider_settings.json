@@ -14,12 +14,6 @@
         "column_break_meta",
         "meta_webhook_verify_token",
         "enabled",
-        "janus_section",
-        "janus_ws_url",
-        "janus_http_url",
-        "janus_api_secret",
-        "column_break_janus",
-        "janus_admin_secret",
         "turn_section",
         "turn_server_url",
         "turn_username",
@@ -87,39 +81,6 @@
             "label": "Enabled",
             "default": 1,
             "description": "Enable/disable the WhatsApp provider service"
-        },
-        {
-            "fieldname": "janus_section",
-            "fieldtype": "Section Break",
-            "label": "Janus WebRTC Gateway"
-        },
-        {
-            "fieldname": "janus_ws_url",
-            "fieldtype": "Data",
-            "label": "Janus WebSocket URL",
-            "description": "WebSocket URL for Janus gateway (e.g., wss://janus.example.com:8989)"
-        },
-        {
-            "fieldname": "janus_http_url",
-            "fieldtype": "Data",
-            "label": "Janus HTTP URL",
-            "description": "HTTP API URL for Janus gateway (e.g., https://janus.example.com:8088/janus)"
-        },
-        {
-            "fieldname": "janus_api_secret",
-            "fieldtype": "Password",
-            "label": "Janus API Secret",
-            "description": "API secret for Janus gateway"
-        },
-        {
-            "fieldname": "column_break_janus",
-            "fieldtype": "Column Break"
-        },
-        {
-            "fieldname": "janus_admin_secret",
-            "fieldtype": "Password",
-            "label": "Janus Admin Secret",
-            "description": "Admin secret for Janus gateway management"
         },
         {
             "fieldname": "turn_section",
