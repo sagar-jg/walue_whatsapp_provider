@@ -35,6 +35,9 @@ def register():
     Returns:
         dict: Customer ID and OAuth credentials
     """
+    # Allow cross-origin requests without CSRF token
+    frappe.flags.ignore_csrf = True
+
     # Get data from form_dict (Frappe auto-parses JSON body)
     customer_name = frappe.form_dict.get("customer_name")
     company_email = frappe.form_dict.get("company_email")
@@ -74,6 +77,42 @@ def register():
         "setup_token_expiry": str(customer.setup_token_expiry),
         "provider_url": provider_url,
         "message": "Customer registered. Complete embedded signup to activate.",
+    }
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def get_status():
+    """
+    Get customer status for dashboard (public endpoint)
+
+    POST Body (JSON):
+        customer_id: Customer ID
+
+    Returns:
+        dict: Connection status and stats
+    """
+    # Allow cross-origin requests without CSRF token
+    frappe.flags.ignore_csrf = True
+
+    customer_id = frappe.form_dict.get("customer_id")
+
+    if not customer_id:
+        return {"error": "Missing customer_id"}
+
+    if not frappe.db.exists("WhatsApp Customer", customer_id):
+        return {"error": "Customer not found"}
+
+    customer = frappe.get_doc("WhatsApp Customer", customer_id)
+
+    return {
+        "success": True,
+        "whatsapp_connected": bool(customer.waba_id),
+        "phone_number": customer.phone_number_id if hasattr(customer, 'phone_number_id') else None,
+        "waba_id": customer.waba_id,
+        "status": customer.status,
+        "messages_sent": 0,  # TODO: Get from usage metrics
+        "calls_made": 0,
+        "templates_count": 0,
     }
 
 
