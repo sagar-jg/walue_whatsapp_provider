@@ -107,7 +107,8 @@ def get_status():
     return {
         "success": True,
         "whatsapp_connected": bool(customer.waba_id),
-        "phone_number": customer.phone_number_id if hasattr(customer, 'phone_number_id') else None,
+        "phone_number": customer.phone_number,
+        "phone_number_id": customer.phone_number_id,
         "waba_id": customer.waba_id,
         "status": customer.status,
         "messages_sent": 0,  # TODO: Get from usage metrics
