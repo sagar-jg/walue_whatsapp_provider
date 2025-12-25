@@ -52,7 +52,7 @@ app_version = "0.0.1"
 # Installation
 # ------------
 # before_install = "walue_whatsapp_provider.install.before_install"
-# after_install = "walue_whatsapp_provider.install.after_install"
+after_install = "walue_whatsapp_provider.install.after_install"
 
 # Uninstallation
 # ------------
@@ -165,7 +165,18 @@ scheduler_events = {
 
 # Translation files
 # -----------------
-# fixtures = []
+
+# Fixtures
+# --------
+# Web Pages for the signup website
+fixtures = [
+    {
+        "doctype": "Web Page",
+        "filters": [
+            ["route", "in", ["walue", "walue-dashboard", "walue-success"]]
+        ]
+    }
+]
 
 # API Whitelist
 # -------------
