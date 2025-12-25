@@ -163,6 +163,8 @@ def callback():
         customer.phone_number = waba_details.get("phone_number")
         customer.embedded_signup_completed = 1
         customer.status = "Active"  # Activate customer after successful signup
+        customer.business_verification_status = "Verified"
+        customer.verification_date = datetime.now()
 
         # Regenerate setup token for client app configuration
         customer._generate_setup_token()
@@ -335,6 +337,8 @@ def complete() -> dict:
         customer.phone_number = phone_number
         customer.embedded_signup_completed = 1
         customer.status = "Active"
+        customer.business_verification_status = "Verified"
+        customer.verification_date = datetime.now()
 
         # Generate setup token for client app configuration
         customer._generate_setup_token()
