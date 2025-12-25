@@ -725,13 +725,25 @@ def connect():
         }
     }
 
-    print(f"[CONNECT] Calling Meta API: {url}")
-    print(f"[CONNECT] Payload (without sdp): messaging_product=whatsapp, to={to_number}, action=connect")
+    # Log full request details for debugging
+    print(f"[CONNECT] ======= META API REQUEST =======")
+    print(f"[CONNECT] URL: {url}")
+    print(f"[CONNECT] Headers: Authorization=Bearer {access_token[:20]}...{access_token[-10:]}")
+    payload_log = {
+        "messaging_product": payload["messaging_product"],
+        "to": payload["to"],
+        "action": payload["action"],
+        "session": {"sdp_type": payload["session"]["sdp_type"], "sdp": f"[SDP {len(sdp)} chars]"}
+    }
+    print(f"[CONNECT] Payload: {json.dumps(payload_log, indent=2)}")
+    print(f"[CONNECT] ================================")
 
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=10)
-        print(f"[CONNECT] Meta response status: {response.status_code}")
-        print(f"[CONNECT] Meta response body: {response.text[:500]}")
+        print(f"[CONNECT] ======= META API RESPONSE =======")
+        print(f"[CONNECT] Status: {response.status_code}")
+        print(f"[CONNECT] Body: {response.text[:1000]}")
+        print(f"[CONNECT] ==================================")
 
         response_data = response.json()
 
