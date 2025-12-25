@@ -269,9 +269,7 @@ def get_setup_info():
         if not session:
             frappe.throw(_("Invalid session"))
 
-        if session.status != "completed":
-            frappe.throw(_("Signup session not completed"))
-
+        # Get customer from session
         customer_id = session.customer
 
     if not frappe.db.exists("WhatsApp Customer", customer_id):
@@ -279,9 +277,22 @@ def get_setup_info():
 
     customer = frappe.get_doc("WhatsApp Customer", customer_id)
 
-    # Only show setup info if WABA is connected
-    if not customer.embedded_signup_completed:
-        frappe.throw(_("WhatsApp Business Account not connected"))
+    # Check if signup is complete - either via session status or customer flag
+    # This handles race conditions where session may not be committed yet
+    if session_id:
+        session = frappe.db.get_value(
+            "Embedded Signup Session",
+            {"session_id": session_id},
+            ["status"],
+            as_dict=True
+        )
+        session_completed = session and session.status == "completed"
+    else:
+        session_completed = False
+
+    # Allow if either session is completed OR customer has completed embedded signup
+    if not session_completed and not customer.embedded_signup_completed:
+        frappe.throw(_("WhatsApp Business Account setup not completed"))
 
     provider_url = frappe.utils.get_url()
 

@@ -186,6 +186,7 @@ def callback():
         session.status = SIGNUP_STATUS_COMPLETED
         session.completed_at = datetime.now()
         session.save(ignore_permissions=True)
+        frappe.db.commit()  # Ensure commit before redirect to avoid race condition
         _log_debug("Session completed", f"session: {session.name}")
 
         # Redirect to success page
@@ -357,6 +358,7 @@ def complete() -> dict:
             session.status = SIGNUP_STATUS_COMPLETED
             session.completed_at = datetime.now()
             session.save(ignore_permissions=True)
+            frappe.db.commit()  # Ensure commit for any subsequent API calls
             _log_debug("Session completed", f"session: {session.name}")
 
         return {
