@@ -35,9 +35,7 @@ def import_web_pages():
     fixtures_path = frappe.get_app_path("walue_whatsapp_provider", "fixtures")
 
     fixture_files = [
-        "web_page_index.json",
-        "web_page_dashboard.json",
-        "web_page_success.json"
+        "web_page.json"
     ]
 
     for fixture_file in fixture_files:
