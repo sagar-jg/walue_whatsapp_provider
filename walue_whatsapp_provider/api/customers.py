@@ -35,9 +35,6 @@ def register():
     Returns:
         dict: Customer ID and OAuth credentials
     """
-    # Allow cross-origin requests without CSRF token
-    frappe.flags.ignore_csrf = True
-
     # Get data from form_dict (Frappe auto-parses JSON body)
     customer_name = frappe.form_dict.get("customer_name")
     company_email = frappe.form_dict.get("company_email")
@@ -91,9 +88,6 @@ def get_status():
     Returns:
         dict: Connection status and stats
     """
-    # Allow cross-origin requests without CSRF token
-    frappe.flags.ignore_csrf = True
-
     customer_id = frappe.form_dict.get("customer_id")
 
     if not customer_id:
