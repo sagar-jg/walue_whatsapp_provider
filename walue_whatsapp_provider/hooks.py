@@ -129,7 +129,7 @@ scheduler_events = {
 
 # Request Events
 # ----------------
-# before_request = ["walue_whatsapp_provider.utils.before_request"]
+before_request = ["walue_whatsapp_provider.utils.request_hooks.before_request"]
 # after_request = ["walue_whatsapp_provider.utils.after_request"]
 
 # Job Events
