@@ -1,0 +1,170 @@
+{
+    "actions": [],
+    "allow_rename": 0,
+    "autoname": "hash",
+    "creation": "2025-01-01 00:00:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "customer",
+        "action",
+        "timestamp",
+        "column_break_1",
+        "waba_id",
+        "phone_number_id",
+        "details_section",
+        "permissions",
+        "policy_version",
+        "column_break_details",
+        "ip_address",
+        "user_agent",
+        "source_section",
+        "source",
+        "meta_user_id",
+        "column_break_source",
+        "session_id",
+        "raw_event_data"
+    ],
+    "fields": [
+        {
+            "fieldname": "customer",
+            "fieldtype": "Link",
+            "label": "Customer",
+            "options": "WhatsApp Customer",
+            "reqd": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "action",
+            "fieldtype": "Select",
+            "label": "Action",
+            "options": "Consent Granted\nConsent Revoked\nPermissions Updated",
+            "reqd": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1
+        },
+        {
+            "fieldname": "timestamp",
+            "fieldtype": "Datetime",
+            "label": "Timestamp",
+            "reqd": 1,
+            "in_list_view": 1,
+            "default": "Now"
+        },
+        {
+            "fieldname": "column_break_1",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "waba_id",
+            "fieldtype": "Data",
+            "label": "WABA ID",
+            "read_only": 1,
+            "description": "WhatsApp Business Account ID at time of action"
+        },
+        {
+            "fieldname": "phone_number_id",
+            "fieldtype": "Data",
+            "label": "Phone Number ID",
+            "read_only": 1
+        },
+        {
+            "fieldname": "details_section",
+            "fieldtype": "Section Break",
+            "label": "Consent Details"
+        },
+        {
+            "fieldname": "permissions",
+            "fieldtype": "Small Text",
+            "label": "Permissions",
+            "read_only": 1,
+            "description": "OAuth scopes/permissions included in this consent"
+        },
+        {
+            "fieldname": "policy_version",
+            "fieldtype": "Data",
+            "label": "Policy Version",
+            "read_only": 1,
+            "description": "Terms of Service / Privacy Policy version"
+        },
+        {
+            "fieldname": "column_break_details",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "ip_address",
+            "fieldtype": "Data",
+            "label": "IP Address",
+            "read_only": 1,
+            "description": "Client IP address for audit"
+        },
+        {
+            "fieldname": "user_agent",
+            "fieldtype": "Small Text",
+            "label": "User Agent",
+            "read_only": 1,
+            "description": "Browser/client user agent string"
+        },
+        {
+            "fieldname": "source_section",
+            "fieldtype": "Section Break",
+            "label": "Source Information",
+            "collapsible": 1
+        },
+        {
+            "fieldname": "source",
+            "fieldtype": "Select",
+            "label": "Source",
+            "options": "Embedded Signup\nWebhook\nManual",
+            "read_only": 1,
+            "description": "How consent was captured"
+        },
+        {
+            "fieldname": "meta_user_id",
+            "fieldtype": "Data",
+            "label": "Meta User ID",
+            "read_only": 1,
+            "description": "Facebook/Meta user ID who performed the action"
+        },
+        {
+            "fieldname": "column_break_source",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "session_id",
+            "fieldtype": "Data",
+            "label": "Session ID",
+            "read_only": 1,
+            "description": "Embedded Signup Session ID"
+        },
+        {
+            "fieldname": "raw_event_data",
+            "fieldtype": "Code",
+            "label": "Raw Event Data",
+            "options": "JSON",
+            "read_only": 1,
+            "description": "Original webhook or event data for debugging"
+        }
+    ],
+    "links": [],
+    "modified": "2025-01-01 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Walue Whatsapp Provider",
+    "name": "WhatsApp Consent Log",
+    "naming_rule": "Random",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "email": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1
+        }
+    ],
+    "sort_field": "timestamp",
+    "sort_order": "DESC",
+    "track_changes": 0
+}

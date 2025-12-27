@@ -28,6 +28,14 @@
         "phone_number_id",
         "phone_number",
         "waba_credentials_temp",
+        "consent_section",
+        "consent_status",
+        "consent_granted_at",
+        "consent_permissions",
+        "column_break_consent",
+        "consent_revoked_at",
+        "consent_policy_version",
+        "consent_ip_address",
         "business_verification_section",
         "business_verification_status",
         "verification_date",
@@ -196,6 +204,61 @@
             "description": "Temporary storage for WABA credentials - cleared after setup token exchange"
         },
         {
+            "fieldname": "consent_section",
+            "fieldtype": "Section Break",
+            "label": "User Consent",
+            "collapsible": 1,
+            "description": "Consent tracking for Meta Embedded Signup compliance"
+        },
+        {
+            "fieldname": "consent_status",
+            "fieldtype": "Select",
+            "label": "Consent Status",
+            "options": "\nGranted\nRevoked",
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "description": "Current consent status from Meta Embedded Signup"
+        },
+        {
+            "fieldname": "consent_granted_at",
+            "fieldtype": "Datetime",
+            "label": "Consent Granted At",
+            "read_only": 1,
+            "description": "Timestamp when user granted consent during embedded signup"
+        },
+        {
+            "fieldname": "consent_permissions",
+            "fieldtype": "Small Text",
+            "label": "Granted Permissions",
+            "read_only": 1,
+            "description": "OAuth scopes/permissions granted (e.g., whatsapp_business_management, whatsapp_business_messaging)"
+        },
+        {
+            "fieldname": "column_break_consent",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "consent_revoked_at",
+            "fieldtype": "Datetime",
+            "label": "Consent Revoked At",
+            "read_only": 1,
+            "description": "Timestamp when user revoked consent (if applicable)"
+        },
+        {
+            "fieldname": "consent_policy_version",
+            "fieldtype": "Data",
+            "label": "Policy Version",
+            "read_only": 1,
+            "description": "Version of terms/policy user agreed to"
+        },
+        {
+            "fieldname": "consent_ip_address",
+            "fieldtype": "Data",
+            "label": "Consent IP Address",
+            "read_only": 1,
+            "description": "IP address from which consent was given (for audit)"
+        },
+        {
             "fieldname": "business_verification_section",
             "fieldtype": "Section Break",
             "label": "Business Verification",
@@ -305,6 +368,14 @@
         },
         {
             "link_doctype": "Customer Invoice",
+            "link_fieldname": "customer"
+        },
+        {
+            "link_doctype": "WhatsApp Consent Log",
+            "link_fieldname": "customer"
+        },
+        {
+            "link_doctype": "Embedded Signup Session",
             "link_fieldname": "customer"
         }
     ],

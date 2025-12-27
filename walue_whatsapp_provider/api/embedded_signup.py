@@ -154,6 +154,12 @@ def callback():
             _log_debug("Subscribing to WABA", f"waba_id: {waba_details['waba_id']}")
             _subscribe_app_to_waba(waba_details["waba_id"], token_data["access_token"])
 
+        # Get client IP for consent audit
+        client_ip = frappe.request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        if not client_ip:
+            client_ip = frappe.request.remote_addr
+        user_agent = frappe.request.headers.get("User-Agent", "")[:500]
+
         # Update customer record with WABA reference
         _log_debug("Updating customer", f"customer: {session.customer}")
         customer = frappe.get_doc("WhatsApp Customer", session.customer)
@@ -165,6 +171,13 @@ def callback():
         customer.status = "Active"  # Activate customer after successful signup
         customer.business_verification_status = "Verified"
         customer.verification_date = datetime.now()
+
+        # Set consent fields (redirect OAuth flow)
+        customer.consent_status = "Granted"
+        customer.consent_granted_at = datetime.now()
+        customer.consent_permissions = "whatsapp_business_management,whatsapp_business_messaging"
+        customer.consent_ip_address = client_ip
+        customer.consent_policy_version = "1.0"
 
         # Regenerate setup token for client app configuration
         customer._generate_setup_token()
@@ -183,6 +196,25 @@ def callback():
         }
         customer.store_waba_credentials_temp(waba_credentials)
         _log_debug("Temp credentials stored", f"customer: {customer.name}")
+
+        # Log consent for GDPR compliance
+        try:
+            from walue_whatsapp_provider.walue_whatsapp_provider.doctype.whatsapp_consent_log.whatsapp_consent_log import (
+                log_consent_granted
+            )
+            log_consent_granted(
+                customer=customer.name,
+                waba_id=waba_details.get("waba_id"),
+                phone_number_id=waba_details.get("phone_number_id"),
+                permissions="whatsapp_business_management,whatsapp_business_messaging",
+                policy_version="1.0",
+                session_id=state,
+                ip_address=client_ip,
+                user_agent=user_agent,
+            )
+            _log_debug("Consent logged (callback)", f"customer: {customer.name}")
+        except Exception as e:
+            _log_debug("Consent logging failed (callback)", str(e))
 
         # Update session as completed
         session.status = SIGNUP_STATUS_COMPLETED
@@ -258,6 +290,7 @@ def complete() -> dict:
         phone_number_id: Phone number ID from Meta
         code: OAuth authorization code (optional)
         access_token: Access token from FB.login (optional, alternative to code)
+        granted_scopes: Comma-separated list of OAuth scopes granted (for consent tracking)
     """
     customer_id = frappe.form_dict.get("customer_id")
     session_id = frappe.form_dict.get("session_id")
@@ -265,8 +298,9 @@ def complete() -> dict:
     phone_number_id = frappe.form_dict.get("phone_number_id")
     code = frappe.form_dict.get("code")
     access_token_param = frappe.form_dict.get("access_token")
+    granted_scopes = frappe.form_dict.get("granted_scopes", "whatsapp_business_management,whatsapp_business_messaging")
 
-    _log_debug("Complete called", f"customer: {customer_id}, session: {session_id}, waba: {waba_id}, phone_id: {phone_number_id}, has_code: {bool(code)}, has_token: {bool(access_token_param)}")
+    _log_debug("Complete called", f"customer: {customer_id}, session: {session_id}, waba: {waba_id}, phone_id: {phone_number_id}, has_code: {bool(code)}, has_token: {bool(access_token_param)}, scopes: {granted_scopes}")
 
     # Validate required parameters
     if not customer_id or not waba_id:
@@ -330,6 +364,12 @@ def complete() -> dict:
         if access_token and waba_id:
             _subscribe_app_to_waba(waba_id, access_token)
 
+        # Get client IP for consent audit
+        client_ip = frappe.request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        if not client_ip:
+            client_ip = frappe.request.remote_addr
+        user_agent = frappe.request.headers.get("User-Agent", "")[:500]
+
         # Update customer record (single save)
         customer = frappe.get_doc("WhatsApp Customer", customer_id)
         customer.waba_id = waba_id
@@ -339,6 +379,13 @@ def complete() -> dict:
         customer.status = "Active"
         customer.business_verification_status = "Verified"
         customer.verification_date = datetime.now()
+
+        # Set consent fields
+        customer.consent_status = "Granted"
+        customer.consent_granted_at = datetime.now()
+        customer.consent_permissions = granted_scopes
+        customer.consent_ip_address = client_ip
+        customer.consent_policy_version = "1.0"  # Update as needed
 
         # Generate setup token for client app configuration
         customer._generate_setup_token()
@@ -356,6 +403,26 @@ def complete() -> dict:
 
         customer.save(ignore_permissions=True)
         _log_debug("Customer updated", f"customer: {customer.name}, waba: {waba_id}, phone: {phone_number}, has_credentials: {bool(access_token)}")
+
+        # Log consent for GDPR compliance
+        try:
+            from walue_whatsapp_provider.walue_whatsapp_provider.doctype.whatsapp_consent_log.whatsapp_consent_log import (
+                log_consent_granted
+            )
+            log_consent_granted(
+                customer=customer.name,
+                waba_id=waba_id,
+                phone_number_id=phone_number_id,
+                permissions=granted_scopes,
+                policy_version="1.0",
+                session_id=session_id,
+                ip_address=client_ip,
+                user_agent=user_agent,
+            )
+            _log_debug("Consent logged", f"customer: {customer.name}")
+        except Exception as e:
+            _log_debug("Consent logging failed", str(e))
+            # Don't fail the signup if consent logging fails
 
         # Update session as completed
         if session:

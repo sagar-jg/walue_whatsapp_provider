@@ -6,11 +6,13 @@ This module handles incoming webhooks from Meta for:
 2. Inbound messages
 3. Call permission responses
 4. Call status updates
+5. Account/permission changes (including consent revocation)
 
 These webhooks are then forwarded to the appropriate customer app
 based on the WABA ID in the webhook payload.
 
 IMPORTANT: We do NOT store webhook data - only route it to customers
+(Exception: Consent changes are logged for compliance)
 """
 
 import frappe
@@ -169,6 +171,10 @@ def _receive_meta_webhook():
                 elif field == "calls":
                     print(f"[WEBHOOK POST] Routing call webhook to customer")
                     _route_call_webhook(customer, value, entry)
+                elif field == "account_update":
+                    # Handle account updates including permission/consent changes
+                    print(f"[WEBHOOK POST] Processing account update webhook")
+                    _handle_account_update(customer, value, entry)
 
         print(f"[WEBHOOK POST] Done processing, returning OK")
         # Return 200 OK quickly to avoid Meta retries
@@ -406,6 +412,128 @@ def _route_message_webhook(customer, value: dict):
                         "response": interactive.get("call_permission_reply", {}).get("response"),
                         "expiration": interactive.get("call_permission_reply", {}).get("expiration_timestamp"),
                     })
+
+
+def _handle_account_update(customer, value: dict, entry: dict):
+    """
+    Handle account update webhooks from Meta.
+
+    This includes:
+    - Permission/consent revocation when user removes app access via Facebook
+    - Phone number changes
+    - Business verification updates
+
+    Per Meta docs, account_update webhooks have this structure:
+    {
+        "event": "REVOKED_FOR_BUSINESS" | "PARTNER_REMOVED" | etc.,
+        "phone_number_id": "...",
+        "ban_info": {...}  # if banned
+    }
+    """
+    event = value.get("event", "").upper()
+    phone_number_id = value.get("phone_number_id")
+    ban_info = value.get("ban_info")
+
+    print(f"[ACCOUNT UPDATE] Event: {event}, phone_number_id: {phone_number_id}")
+    print(f"[ACCOUNT UPDATE] Full value: {json.dumps(value)}")
+
+    # Handle consent/permission revocation events
+    revocation_events = [
+        "REVOKED_FOR_BUSINESS",  # User revoked access for this business
+        "PARTNER_REMOVED",        # Partner (us) was removed
+        "DISABLE",                # Phone number disabled
+        "REVOKED",                # General revocation
+    ]
+
+    if event in revocation_events:
+        print(f"[ACCOUNT UPDATE] Consent revocation detected for customer: {customer.name}")
+        _handle_consent_revocation(customer, value, entry)
+    elif event == "PHONE_NUMBER_NAME_UPDATE":
+        print(f"[ACCOUNT UPDATE] Phone number name update (no action needed)")
+    elif ban_info:
+        print(f"[ACCOUNT UPDATE] Ban detected: {json.dumps(ban_info)}")
+        _handle_account_ban(customer, ban_info, entry)
+    else:
+        print(f"[ACCOUNT UPDATE] Unknown event: {event}")
+        # Log for debugging
+        frappe.log_error(
+            title=f"Unknown account update event: {event}",
+            message=f"Customer: {customer.name}\nValue: {json.dumps(value)}"
+        )
+
+
+def _handle_consent_revocation(customer, value: dict, entry: dict):
+    """
+    Handle consent revocation from Meta.
+
+    When a user revokes our app's access via their Facebook/WhatsApp settings,
+    we receive this webhook and must:
+    1. Log the revocation for compliance
+    2. Update customer consent status
+    3. Optionally suspend the customer
+    4. Forward to customer app
+    """
+    from walue_whatsapp_provider.walue_whatsapp_provider.doctype.whatsapp_consent_log.whatsapp_consent_log import (
+        log_consent_revoked
+    )
+
+    try:
+        # Log the consent revocation for GDPR compliance
+        log_consent_revoked(
+            customer=customer.name,
+            waba_id=customer.waba_id,
+            meta_user_id=value.get("user_id"),
+            raw_event_data={"value": value, "entry": entry},
+            source="Webhook"
+        )
+        print(f"[CONSENT REVOCATION] Logged for customer: {customer.name}")
+
+    except Exception as e:
+        frappe.log_error(
+            title=f"Failed to log consent revocation: {customer.name}",
+            message=str(e)
+        )
+
+    # Forward revocation event to customer app
+    _forward_to_customer(customer, {
+        "type": "consent_revoked",
+        "event": value.get("event"),
+        "phone_number_id": value.get("phone_number_id"),
+        "timestamp": entry.get("time"),
+        "waba_id": customer.waba_id,
+    })
+
+
+def _handle_account_ban(customer, ban_info: dict, entry: dict):
+    """
+    Handle account ban notification from Meta.
+
+    This is a serious compliance event that needs immediate attention.
+    """
+    frappe.log_error(
+        title=f"WABA Banned: {customer.name}",
+        message=f"Customer: {customer.name}\n"
+                f"WABA ID: {customer.waba_id}\n"
+                f"Ban Info: {json.dumps(ban_info)}"
+    )
+
+    # Update customer status
+    try:
+        customer.status = "Suspended"
+        customer.account_quality_rating = "Red"
+        customer.save(ignore_permissions=True)
+    except Exception as e:
+        frappe.log_error(
+            title=f"Failed to update banned customer: {customer.name}",
+            message=str(e)
+        )
+
+    # Forward to customer app
+    _forward_to_customer(customer, {
+        "type": "account_banned",
+        "ban_info": ban_info,
+        "timestamp": entry.get("time"),
+    })
 
 
 def _route_call_webhook(customer, value: dict, entry: dict):
