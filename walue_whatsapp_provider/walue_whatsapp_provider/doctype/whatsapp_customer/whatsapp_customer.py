@@ -130,3 +130,43 @@ class WhatsAppCustomer(Document):
             except (json.JSONDecodeError, TypeError):
                 return {}
         return {}
+
+    @frappe.whitelist()
+    def debug_show_waba_token(self):
+        """
+        DEBUG ONLY: Display WABA access token for debugging.
+        Returns the decrypted credentials including access token.
+
+        Usage: From browser console or via API
+        frappe.call({
+            method: 'frappe.client.get',
+            args: {
+                doctype: 'WhatsApp Customer',
+                name: 'WC-2025-00001'
+            },
+            callback: (r) => {
+                frappe.call({
+                    method: 'debug_show_waba_token',
+                    doc: r.message,
+                    callback: (r) => console.log(r.message)
+                })
+            }
+        })
+        """
+        credentials = self.get_waba_credentials_temp()
+        if not credentials:
+            return {
+                "success": False,
+                "message": "No WABA credentials found (already cleared or not set)"
+            }
+
+        return {
+            "success": True,
+            "customer": self.name,
+            "customer_name": self.customer_name,
+            "waba_id": credentials.get("waba_id"),
+            "phone_number_id": credentials.get("phone_number_id"),
+            "access_token": credentials.get("access_token"),
+            "meta_business_id": credentials.get("business_id"),
+            "message": "⚠️ DEBUG MODE: Access token retrieved. Keep this secure!"
+        }

@@ -259,3 +259,62 @@ def activate():
         "success": True,
         "message": f"Customer {customer_id} activated",
     }
+
+
+@frappe.whitelist(allow_guest=False, methods=["GET"])
+def debug_get_waba_token():
+    """
+    DEBUG ONLY: Get customer's WABA access token for debugging
+
+    Query Parameters:
+        customer_id: Customer ID (e.g., WC-2025-00001)
+
+    Usage:
+        GET /api/method/walue_whatsapp_provider.api.customers.debug_get_waba_token?customer_id=WC-2025-00001
+
+    Or from browser console:
+        frappe.call({
+            method: 'walue_whatsapp_provider.api.customers.debug_get_waba_token',
+            args: { customer_id: 'WC-2025-00001' },
+            callback: (r) => console.log(r.message)
+        })
+
+    ⚠️ WARNING: This endpoint exposes sensitive access tokens. Only use for debugging.
+    Requires System Manager role.
+    """
+    if "System Manager" not in frappe.get_roles():
+        frappe.throw(_("Not authorized - System Manager role required"), frappe.PermissionError)
+
+    customer_id = frappe.form_dict.get("customer_id")
+
+    if not customer_id:
+        frappe.throw(_("Missing customer_id parameter"))
+
+    if not frappe.db.exists("WhatsApp Customer", customer_id):
+        frappe.throw(_(f"Customer {customer_id} not found"))
+
+    customer = frappe.get_doc("WhatsApp Customer", customer_id)
+    credentials = customer.get_waba_credentials_temp()
+
+    if not credentials:
+        return {
+            "success": False,
+            "customer_id": customer_id,
+            "message": "No WABA credentials found. Either already cleared after setup or not yet configured.",
+            "note": "Credentials are temporarily stored after embedded signup and cleared once the customer's app retrieves them."
+        }
+
+    return {
+        "success": True,
+        "customer_id": customer.name,
+        "customer_name": customer.customer_name,
+        "frappe_site_url": customer.frappe_site_url,
+        "waba_credentials": {
+            "waba_id": credentials.get("waba_id"),
+            "phone_number_id": credentials.get("phone_number_id"),
+            "phone_number": credentials.get("phone_number"),
+            "access_token": credentials.get("access_token"),
+            "meta_business_id": credentials.get("business_id"),
+        },
+        "warning": "⚠️ DEBUG MODE: Access token is sensitive. Keep this secure and use only for debugging!"
+    }
