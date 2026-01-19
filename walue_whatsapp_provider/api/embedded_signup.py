@@ -193,6 +193,7 @@ def callback():
             "phone_number": waba_details.get("phone_number"),
             "business_id": waba_details.get("business_id"),
             "access_token": token_data["access_token"],
+            "app_id": settings.meta_app_id,  # Include App ID for template media uploads
         }
         customer.store_waba_credentials_temp(waba_credentials)
         _log_debug("Temp credentials stored", f"customer: {customer.name}")
@@ -393,11 +394,14 @@ def complete() -> dict:
         # Store temp credentials in memory before save (avoid double save)
         if access_token:
             import json
+            # Get provider settings for app_id
+            settings = frappe.get_single("WhatsApp Provider Settings")
             waba_credentials = {
                 "waba_id": waba_id,
                 "phone_number_id": phone_number_id,
                 "phone_number": phone_number,
                 "access_token": access_token,
+                "app_id": settings.meta_app_id,  # Include App ID for template media uploads
             }
             customer.waba_credentials_temp = json.dumps(waba_credentials)
 

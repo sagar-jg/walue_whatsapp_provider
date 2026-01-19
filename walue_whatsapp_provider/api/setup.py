@@ -112,6 +112,7 @@ def exchange_token():
             "phone_number_id": waba_credentials.get("phone_number_id") or customer.phone_number_id,
             "phone_number": waba_credentials.get("phone_number") or customer.phone_number,
             "meta_business_id": waba_credentials.get("business_id") or customer.meta_business_id,
+            "meta_app_id": waba_credentials.get("app_id"),
             "meta_access_token": waba_credentials.get("access_token"),
 
             # Features (based on subscription plan)
